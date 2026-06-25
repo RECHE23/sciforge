@@ -18,7 +18,7 @@ include path, so the headers are reached as `<sciforge/test/framework.hpp>`.
 clone and wire it onto the test binary:
 
 ```cmake
-set(SCIFORGE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sciforge-v1/include"
+set(SCIFORGE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sciforge/include"
     CACHE PATH "Path to SciForge's include directory")
 target_include_directories(my_tests PRIVATE "${SCIFORGE_INCLUDE_DIR}")
 ```
