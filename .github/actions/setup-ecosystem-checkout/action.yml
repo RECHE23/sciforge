@@ -1,19 +1,23 @@
 name: setup-ecosystem-checkout
 description: >
-  Checks out the calling consumer (at ./consumer), its dependency siblings (cloned
-  from a JSON list, public or private via ci-pat), and SciForge's lint/ + harness
-  (at ./sciforge-lint, pinned to sciforge-ref). The dependency clones are
-  idempotent — they rm -rf the target first — so this is safe on the persistent
-  self-hosted runner workspace (where a plain git clone would hit "already exists").
-  Shared by the lint-cpp and build-cpp reusable workflows so the checkout lives once.
+  Checks out the calling consumer (at ./consumer) and its dependency siblings
+  (cloned from a JSON list, public or private via ci-pat) as workspace-root
+  siblings. The dependency clones are idempotent — they rm -rf the target first —
+  so this is safe on the persistent self-hosted runner workspace (where a plain
+  git clone would hit "already exists").
+
+  The caller checks out SciForge itself (to ./sciforge) in a PRIOR step. That
+  bootstrap does double duty: a reusable workflow can only reach a local action
+  after the action's repository is checked out, so the bootstrap is what makes
+  THIS action resolvable (referenced as ./sciforge/.github/actions/...); and it
+  provides the shared lint/ config + test harness the build/lint steps consume.
+  Shared by the lint-cpp and build-cpp reusable workflows so the checkout of the
+  consumer + deps lives in one place.
 
 inputs:
   deps:
     description: 'JSON array of {repo, path} dependency siblings, in topological order.'
     default: '[]'
-  sciforge-ref:
-    description: "SciForge tag/ref for the lint/ config + harness source."
-    required: true
   ci-pat:
     description: 'Token with read access for private dependency checkouts (optional).'
     default: ''
@@ -40,8 +44,3 @@ runs:
           rm -rf "$path"
           git clone --depth 1 "$url" "$path"
         done
-    - uses: actions/checkout@v6
-      with:
-        repository: RECHE23/sciforge
-        ref: ${{ inputs.sciforge-ref }}
-        path: sciforge-lint

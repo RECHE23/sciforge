@@ -57,10 +57,16 @@ jobs:
     needs: route
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
     steps:
-      # Shared checkout (consumer + SciForge lint/). Format needs no dep siblings.
-      - uses: ./.github/actions/setup-ecosystem-checkout
+      # Bootstrap SciForge (lint/ + the shared composite). A reusable workflow can
+      # only reach a local action after its repo is checked out, so this prior
+      # checkout is what makes ./sciforge/.github/actions/... resolvable.
+      - uses: actions/checkout@v6
         with:
-          sciforge-ref: ${{ inputs.sciforge-ref }}
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge
+      # Shared checkout (consumer). Format needs no dep siblings.
+      - uses: ./sciforge/.github/actions/setup-ecosystem-checkout
       # Hosted runners build the pinned Uncrustify (cached); self-hosted has it.
       - name: Cache Uncrustify 0.82.0
         if: needs.route.outputs.self != 'true'
@@ -85,19 +91,24 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           sub='${{ inputs.makefile-subdir }}'
           dir="consumer${sub:+/$sub}"
-          make -C "$dir" format-check SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge-lint/lint"
+          make -C "$dir" format-check SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge/lint"
 
   misra:
     needs: route
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
     steps:
-      # Shared checkout (consumer + dep siblings + SciForge lint/), idempotent on
-      # the persistent self-hosted workspace. The synthetic MISRA TU includes the
-      # dep headers, so the siblings must be present.
-      - uses: ./.github/actions/setup-ecosystem-checkout
+      # Bootstrap SciForge (lint/ + the shared composite); see the format job.
+      - uses: actions/checkout@v6
+        with:
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge
+      # Shared checkout (consumer + dep siblings), idempotent on the persistent
+      # self-hosted workspace. The synthetic MISRA TU includes the dep headers, so
+      # the siblings must be present.
+      - uses: ./sciforge/.github/actions/setup-ecosystem-checkout
         with:
           deps: ${{ inputs.deps }}
-          sciforge-ref: ${{ inputs.sciforge-ref }}
           ci-pat: ${{ secrets.ci-pat }}
       # Pin clang-tidy to 18 on hosted so MISRA matches the local pre-check and the
       # self-hosted runners (also 18), and doesn't drift when the image bumps its
@@ -112,4 +123,4 @@ jobs:
         run: |
           sub='${{ inputs.makefile-subdir }}'
           dir="consumer${sub:+/$sub}"
-          make -C "$dir" misra SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge-lint/lint"
+          make -C "$dir" misra SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge/lint"

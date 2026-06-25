@@ -7,13 +7,15 @@ name: build-cpp (reusable)
 # consumer's bespoke posix+cmake jobs did, lifted into one definition so the build
 # matrix, the dependency checkout and the self-hosted routing live once.
 #
-# Checkout is delegated to the setup-ecosystem-checkout composite (shared with
-# lint-cpp): the consumer lands at ./consumer, dependency siblings at ./<path>
-# (idempotent clones, safe on the persistent self-hosted workspace), SciForge at
-# ./sciforge-lint. The SciForge checkout doubles as the test-harness source
-# (<sciforge/test/framework.hpp>): we pass its include/ as SCIFORGE_INCLUDE (Make)
-# and SCIFORGE_INCLUDE_DIR (CMake), so consumers never rely on the ../sciforge
-# sibling default in CI.
+# Checkout: each job first bootstraps SciForge to ./sciforge (a reusable workflow
+# can only reach a local action after its repo is checked out — this is what makes
+# the ./sciforge/.github/actions/setup-ecosystem-checkout composite resolvable, and
+# it provides lint/ + the harness). The composite then lands the consumer at
+# ./consumer and its dependency siblings at ./<path> (idempotent clones, safe on
+# the persistent self-hosted workspace). The SciForge checkout doubles as the
+# test-harness source (<sciforge/test/framework.hpp>): we pass its include/ as
+# SCIFORGE_INCLUDE (Make) and SCIFORGE_INCLUDE_DIR (CMake), so consumers never rely
+# on the ../sciforge sibling default in CI.
 #
 # Idempotent by design (the routed runners are persistent, not fresh): every step
 # removes its build/ and the shared _stage install prefix before using them, so a
@@ -94,10 +96,18 @@ jobs:
         cxx: [g++-14, clang++]
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
     steps:
-      - uses: ./.github/actions/setup-ecosystem-checkout
+      # Bootstrap SciForge (lint/ + harness + the shared composite). A reusable
+      # workflow can only reach a local action after its repo is checked out, so
+      # this prior checkout makes ./sciforge/.github/actions/... resolvable and
+      # provides <sciforge/test/framework.hpp> at $GITHUB_WORKSPACE/sciforge/include.
+      - uses: actions/checkout@v6
+        with:
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge
+      - uses: ./sciforge/.github/actions/setup-ecosystem-checkout
         with:
           deps: ${{ inputs.deps }}
-          sciforge-ref: ${{ inputs.sciforge-ref }}
           ci-pat: ${{ secrets.ci-pat }}
       # Hosted runners don't ship g++-14 by default; self-hosted is pre-provisioned.
       - name: Install g++-14 (hosted only)
@@ -109,14 +119,14 @@ jobs:
           sub='${{ inputs.makefile-subdir }}'
           dir="consumer${sub:+/$sub}"
           make -C "$dir" test CXX=${{ matrix.cxx }} \
-            SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge-lint/include"
+            SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge/include"
       - name: Sanitizers (ASan + UBSan)
         shell: bash
         run: |
           sub='${{ inputs.makefile-subdir }}'
           dir="consumer${sub:+/$sub}"
           make -C "$dir" sanitize CXX=${{ matrix.cxx }} \
-            SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge-lint/include"
+            SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge/include"
 
   # Portable build entry: x86-64 Linux (routed), Windows/MSVC (routed) and native
   # AArch64 (always hosted), through CMake. Installs the dependency chain to a
@@ -130,10 +140,18 @@ jobs:
         leg: ${{ fromJSON(needs.route.outputs.cmake_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}
     steps:
-      - uses: ./.github/actions/setup-ecosystem-checkout
+      # Bootstrap SciForge (lint/ + harness + the shared composite). A reusable
+      # workflow can only reach a local action after its repo is checked out, so
+      # this prior checkout makes ./sciforge/.github/actions/... resolvable and
+      # provides <sciforge/test/framework.hpp> at $GITHUB_WORKSPACE/sciforge/include.
+      - uses: actions/checkout@v6
+        with:
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge
+      - uses: ./sciforge/.github/actions/setup-ecosystem-checkout
         with:
           deps: ${{ inputs.deps }}
-          sciforge-ref: ${{ inputs.sciforge-ref }}
           ci-pat: ${{ secrets.ci-pat }}
       # One bash script across all OSes (Git bash is on PATH on the Windows runner);
       # --config/-C Release covers the multi-config MSVC generator and no-ops on the
@@ -144,7 +162,7 @@ jobs:
         run: |
           set -e
           WS="$GITHUB_WORKSPACE"
-          HARNESS="$WS/sciforge-lint/include"
+          HARNESS="$WS/sciforge/include"
           STAGE="$WS/_stage"
           sub='${{ inputs.makefile-subdir }}'
           proj="consumer${sub:+/$sub}"
