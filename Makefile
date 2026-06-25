@@ -18,7 +18,7 @@ endif
 
 FORMAT_FILES := $(shell find include tests examples -name '*.hpp' -o -name '*.cpp')
 
-.PHONY: all build test format format-check lint clean release help
+.PHONY: all build test format format-check lint lint-config clean release help
 
 .DEFAULT_GOAL := help
 
@@ -30,6 +30,7 @@ help:
 	@echo "  make format        Uncrustify, in place"
 	@echo "  make format-check  Uncrustify, dry-run, exits non-zero on diff"
 	@echo "  make lint          clang-tidy over the test sources"
+	@echo "  make lint-config   Self-test the shared MISRA base (lint/clang-tidy-misra)"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
 	@echo "                     dry-run: make release DRY_RUN=1"
@@ -53,6 +54,12 @@ format-check:
 
 lint:
 	@ls tests/*.cpp | xargs -P $(JOBS) -I{} clang-tidy {} -- -std=c++20 -Iinclude
+
+# Self-test the shared MISRA base that SciForge ships for the whole ecosystem
+# (lint/clang-tidy-misra): it must parse and still behave (an enabled check fires,
+# the documented deviations stay suppressed). Override the binary with CLANG_TIDY=.
+lint-config:
+	@CLANG_TIDY=$${CLANG_TIDY:-clang-tidy} lint/test/run.sh
 
 clean:
 	rm -rf $(BUILD)

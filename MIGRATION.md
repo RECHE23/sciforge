@@ -42,3 +42,28 @@ SIBLING `SCIFORGE_INCLUDE_DIR` — their CI cannot yet find it. The next slice w
 each consumer's CI to FetchContent `RECHE23/sciforge` at `SCIFORGE_TAG=v2026.6.0`
 and pushes its reserve, which decouples all six reserves at once. Until then, any
 change to `sciforge/test/framework.hpp` must be re-gated across consumers.
+
+## cat-A — shared lint configuration (in progress)
+
+After the ecosystem MISRA remediation, the corrected lint config is identical in
+shape across all six repos, so it is lifted here to be correct once.
+
+**Step 1 (this change):** SciForge now ships `lint/clang-tidy-misra` (the MISRA
+base, with the two universally-safe promotions folded in — `-cert-dcl21-cpp` and
+`hicpp-signed-bitwise.IgnorePositiveIntegerLiterals`) and `lint/uncrustify.cfg`
+(verbatim). `make lint-config` self-tests the base (parses + behaves), and CI runs
+it. The only genuinely per-repo deviation left is real-regex's SBO
+`-cppcoreguidelines-pro-type-union-access`, which a consumer appends with
+`--checks=` rather than forking the file.
+
+| Lint asset | Owner after cat-A |
+|------------|-------------------|
+| `uncrustify.cfg` | SciForge `lint/uncrustify.cfg` (was identical in all 6) |
+| `.clang-tidy-misra` | SciForge `lint/clang-tidy-misra` (base); per-repo deviation via `--checks` |
+| `.clang-tidy` (lint) | **stays local** — per-repo, auto-discovered |
+
+**Steps 2–3 (pending, per consumer on signal):** each repo bumps `SCIFORGE_TAG`,
+points `make misra`/`make format` at the SciForge `lint/`, deletes its local
+`.clang-tidy-misra` + `uncrustify.cfg` (real-regex keeps a one-line `--checks`),
+and verifies `make misra` = 0 under clang-tidy 18 **and** 22 + a byte-identical
+`make format`. real-regex goes first (it exercises both the base and `--checks`).

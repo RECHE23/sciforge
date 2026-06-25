@@ -1,0 +1,38 @@
+# MISRA C++:2023-oriented analysis profile — the shared base owned by SciForge and
+# consumed by every ecosystem repository through `make misra`. The header scope is
+# supplied on the command line (--header-filter), so this profile is project-agnostic.
+#
+# A repository with one additional, justified deviation appends it on the clang-tidy
+# command line (--checks=...), never by forking this file; each repo records its
+# deviations in its own MISRA.md. See lint/test/ for the self-test guarding this file.
+Checks: >
+  -*,
+  cppcoreguidelines-*,
+  cert-*,
+  bugprone-*,
+  hicpp-*,
+  misc-*,
+  modernize-use-nullptr,
+  readability-implicit-bool-conversion,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -hicpp-avoid-c-arrays,
+  -cppcoreguidelines-avoid-c-arrays,
+  -modernize-avoid-c-arrays,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -hicpp-named-parameter,
+  -readability-named-parameter,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -misc-no-recursion,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cert-dcl21-cpp
+WarningsAsErrors: '*'
+CheckOptions:
+  # A positive integer literal is a known, non-negative bitwise operand (e.g. a shift
+  # count `x >> 32`), always well-defined. This refinement keeps hicpp-signed-bitwise
+  # firing on actual signed variables while ignoring such literals; not a blanket disable.
+  hicpp-signed-bitwise.IgnorePositiveIntegerLiterals: 'true'
