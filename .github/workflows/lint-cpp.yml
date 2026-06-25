@@ -1,0 +1,134 @@
+name: lint-cpp (reusable)
+
+# Reusable lint spine for the ecosystem: runs a consumer's `make format-check`
+# and `make misra` against SciForge's shared lint/ config (cat-A), with the
+# clang-tidy-18 pin baked in so MISRA results are reproducible everywhere — closing
+# the local@22 vs CI@18 gap at the source. The consumer's Makefile already carries
+# its own --header-filter, --checks and synthetic TU (cat-A), so this workflow only
+# needs to check out the consumer + its deps + SciForge, pin the toolchain, and run
+# the targets. SciForge passes SCIFORGE_LINT explicitly (absolute), so the relative
+# default in each consumer's Makefile is never relied on in CI.
+#
+# Inputs let one definition serve every repo:
+#   deps            JSON array of sibling checkouts the misra TU needs, e.g.
+#                   '[{"repo":"RECHE23/scilex","path":"scilex","private":true}]'
+#   sciforge-ref    the SciForge tag the consumer pins (the lint/ config source)
+#   runner-mode     'hosted' (GitHub runners) or 'routed' (self-hosted when the
+#                   maintainer pushes; GitHub-hosted for PRs / other actors)
+#   makefile-subdir optional subdir under the checkout to run make in (the self-test
+#                   fixture uses it; real consumers leave it empty)
+# secrets.ci-pat is only needed when a dep is private.
+
+on:
+  workflow_call:
+    inputs:
+      deps:            { type: string, default: '[]' }
+      sciforge-ref:    { type: string, required: true }
+      runner-mode:     { type: string, default: 'hosted' }
+      makefile-subdir: { type: string, default: '' }
+    secrets:
+      ci-pat:          { required: false }
+
+jobs:
+  # Emit the runner labels. 'routed' picks self-hosted only for the maintainer's
+  # own (non-PR) pushes; everything else stays on GitHub-hosted runners.
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      linux: ${{ steps.pick.outputs.linux }}
+      self:  ${{ steps.pick.outputs.self }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          MODE:  ${{ inputs.runner-mode }}
+          ACTOR: ${{ github.actor }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "RECHE23" ] && [ "$EVENT" != "pull_request" ]; then
+            echo 'linux=["self-hosted","self-hosted-linux"]' >> "$GITHUB_OUTPUT"
+            echo 'self=true'  >> "$GITHUB_OUTPUT"
+          else
+            echo 'linux=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+            echo 'self=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  format:
+    needs: route
+    runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: consumer
+      - uses: actions/checkout@v6
+        with:
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge-lint
+      # Hosted runners build the pinned Uncrustify (cached); self-hosted has it.
+      - name: Cache Uncrustify 0.82.0
+        if: needs.route.outputs.self != 'true'
+        id: uncrustify
+        uses: actions/cache@v5
+        with:
+          path: ~/.local/bin/uncrustify
+          key: uncrustify-0.82.0-${{ runner.os }}
+      - name: Build Uncrustify 0.82.0
+        if: needs.route.outputs.self != 'true' && steps.uncrustify.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake build-essential
+          curl -L -o uncrustify-src.tar.gz https://github.com/uncrustify/uncrustify/releases/download/uncrustify-0.82.0/uncrustify-0.82.0.tar.gz
+          tar -xzf uncrustify-src.tar.gz
+          cd uncrustify-uncrustify-0.82.0
+          mkdir build && cd build
+          cmake .. && cmake --build . -j
+          mkdir -p "$HOME/.local/bin" && cp uncrustify "$HOME/.local/bin/"
+      - name: Format check
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          sub='${{ inputs.makefile-subdir }}'
+          dir="consumer${sub:+/$sub}"
+          make -C "$dir" format-check SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge-lint/lint"
+
+  misra:
+    needs: route
+    runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: consumer
+      - name: Checkout dependency siblings
+        if: inputs.deps != '[]'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.ci-pat }}
+        run: |
+          echo '${{ inputs.deps }}' | jq -c '.[]' | while read -r d; do
+            repo=$(echo "$d" | jq -r .repo)
+            path=$(echo "$d" | jq -r .path)
+            url="https://github.com/$repo.git"
+            if [ -n "${GH_TOKEN:-}" ]; then
+              url="https://x-access-token:$GH_TOKEN@github.com/$repo.git"
+            fi
+            git clone --depth 1 "$url" "$path"
+          done
+      - uses: actions/checkout@v6
+        with:
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge-lint
+      # Pin clang-tidy to 18 on hosted so MISRA matches the local pre-check and the
+      # self-hosted runners (also 18), and doesn't drift when the image bumps its
+      # default. Self-hosted already has the pinned binary.
+      - name: Install clang-tidy 18 (pinned)
+        if: needs.route.outputs.self != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y clang-tidy-18
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
+      - name: MISRA C++:2023-oriented analysis
+        shell: bash
+        run: |
+          sub='${{ inputs.makefile-subdir }}'
+          dir="consumer${sub:+/$sub}"
+          make -C "$dir" misra SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge-lint/lint"

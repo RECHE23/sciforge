@@ -1,0 +1,21 @@
+name: CI selftest
+
+# Exercises the reusable lint-cpp workflow against the in-repo fixture
+# (examples/lint_consumer/) so the spine is developed and validated HERE, on
+# SciForge's own minutes, before any consumer adopts it. A consumer adoption that
+# goes red means a bug to fix and re-green HERE — never an iterative debug loop in
+# the consumer's CI. Trunk-based, so push-only (github.sha is a real commit that the
+# reusable workflow can check out as the lint/ source).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint-cpp:
+    uses: ./.github/workflows/lint-cpp.yml
+    with:
+      deps: '[]'                              # the fixture is a leaf
+      sciforge-ref: ${{ github.sha }}         # lint/ from the commit under test
+      runner-mode: hosted
+      makefile-subdir: examples/lint_consumer

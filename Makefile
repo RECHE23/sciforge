@@ -16,7 +16,9 @@ ifeq ($(origin CXX),command line)
 CMAKE_CXX := -DCMAKE_CXX_COMPILER=$(CXX)
 endif
 
-FORMAT_FILES := $(shell find include tests examples -name '*.hpp' -o -name '*.cpp')
+# Prune build/ dirs: the lint_consumer fixture generates a TU under build/ (and
+# CMake builds land there too) — those are not ours to format.
+FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
 .PHONY: all build test format format-check lint lint-config clean release help
 
