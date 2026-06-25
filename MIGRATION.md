@@ -26,10 +26,18 @@ None. All four Slice-2 consumers had a `framework.hpp` whose functional body was
 byte-identical to the canonical copy; the only difference was the include-guard
 region (`#ifndef/#define`+`#endif` vs `#pragma once`), exactly as for REAL.
 
-## Coupling caveat (temporary)
+## Remote — `RECHE23/sciforge`, v2026.6.0 (public)
 
-While SciForge is a LOCAL repo with no remote, all five consumers carry a reserve
-coupled to this on-disk copy. Any change to `sciforge/test/framework.hpp` must be
-propagated (re-gate every consumer) before their gates are considered
-representative. This is resolved by remote-ising SciForge + CI FetchContent,
-which should follow Slice 2 promptly.
+SciForge is now a public remote repository (`RECHE23/sciforge`), CI-validated on
+all three OS (incl. the dummy-consumer proving FetchContent works in CI), and
+released at the first CalVer tag **v2026.6.0** — a pinnable tag. v2026.6.0 is a
+bootstrap milestone: it proves the inclusion mechanism; the only reusable asset so
+far is the canonical test harness.
+
+## Coupling caveat (being resolved)
+
+Each consumer currently carries a local reserve that resolves the harness via the
+SIBLING `SCIFORGE_INCLUDE_DIR` — their CI cannot yet find it. The next slice wires
+each consumer's CI to FetchContent `RECHE23/sciforge` at `SCIFORGE_TAG=v2026.6.0`
+and pushes its reserve, which decouples all six reserves at once. Until then, any
+change to `sciforge/test/framework.hpp` must be re-gated across consumers.
