@@ -11,7 +11,7 @@ mirroring the pattern proven in REAL (Slice 1).
 | Consumer    | State                | Notes                                                        |
 |-------------|----------------------|--------------------------------------------------------------|
 | real-v1     | **remote-wired ✓**   | CI fetches RECHE23/sciforge@v2026.6.0 (`bde48a2`, pushed, CI+Docs green 2026-06-25). Canary. |
-| scilex-v1   | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
+| scilex-v1   | **remote-wired ✓**   | CI fetches RECHE23/sciforge@v2026.6.0 (`4a5f73f`, pushed, CI+Docs green 2026-06-25). |
 | sciparse-v1 | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
 | scilang-v1  | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
 | scinum-v1   | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
