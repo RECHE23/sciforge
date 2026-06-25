@@ -1,0 +1,172 @@
+name: build-cpp (reusable)
+
+# Reusable build spine for the ecosystem: the POSIX developer workflow (the
+# Makefile under both compilers, plus ASan+UBSan sanitizers) and the portable
+# CMake entry (configure/build/test/install + a find_package smoke that proves the
+# installed config package and its transitive chain). It mirrors what every
+# consumer's bespoke posix+cmake jobs did, lifted into one definition so the build
+# matrix, the dependency checkout and the self-hosted routing live once.
+#
+# Checkout is delegated to the setup-ecosystem-checkout composite (shared with
+# lint-cpp): the consumer lands at ./consumer, dependency siblings at ./<path>
+# (idempotent clones, safe on the persistent self-hosted workspace), SciForge at
+# ./sciforge-lint. The SciForge checkout doubles as the test-harness source
+# (<sciforge/test/framework.hpp>): we pass its include/ as SCIFORGE_INCLUDE (Make)
+# and SCIFORGE_INCLUDE_DIR (CMake), so consumers never rely on the ../sciforge
+# sibling default in CI.
+#
+# Idempotent by design (the routed runners are persistent, not fresh): every step
+# removes its build/ and the shared _stage install prefix before using them, so a
+# leftover from a previous run can never poison a configure or a find_package.
+#
+# Inputs:
+#   deps            JSON array of {repo, path} dependency siblings, in TOPOLOGICAL
+#                   order (leaves first) — used both as configure-time siblings and
+#                   as the cmake install order so find_package resolves the chain.
+#   sciforge-ref    the SciForge tag the consumer pins (lint/ + harness source)
+#   runner-mode     'hosted' or 'routed' (self-hosted on the maintainer's pushes)
+#   makefile-subdir optional subdir under the checkout to build in (the self-test
+#                   fixture uses it; real consumers leave it empty)
+#   enable-msvc     include the Windows/MSVC cmake leg (default true)
+#   enable-arm      include the native AArch64 cmake leg (default true, always hosted)
+# secrets.ci-pat is only needed when a dependency is private.
+
+on:
+  workflow_call:
+    inputs:
+      deps:            { type: string,  default: '[]' }
+      sciforge-ref:    { type: string,  required: true }
+      runner-mode:     { type: string,  default: 'hosted' }
+      makefile-subdir: { type: string,  default: '' }
+      enable-msvc:     { type: boolean, default: true }
+      enable-arm:      { type: boolean, default: true }
+    secrets:
+      ci-pat:          { required: false }
+
+jobs:
+  # Emit the Linux runner labels, the self-hosted flag, and the cmake matrix (a JSON
+  # array of {name, runner}; runner is a JSON-array string consumed via fromJSON).
+  # 'routed' picks self-hosted only for the maintainer's own (non-PR) pushes. The
+  # ARM leg is always hosted (no self-hosted AArch64); the Windows/ARM legs are
+  # included per the enable-msvc / enable-arm toggles.
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      linux:        ${{ steps.pick.outputs.linux }}
+      self:         ${{ steps.pick.outputs.self }}
+      cmake_matrix: ${{ steps.pick.outputs.cmake_matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          MODE:        ${{ inputs.runner-mode }}
+          ACTOR:       ${{ github.actor }}
+          EVENT:       ${{ github.event_name }}
+          ENABLE_MSVC: ${{ inputs.enable-msvc }}
+          ENABLE_ARM:  ${{ inputs.enable-arm }}
+        run: |
+          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "RECHE23" ] && [ "$EVENT" != "pull_request" ]; then
+            LINUX='["self-hosted","self-hosted-linux"]'
+            WINDOWS='["self-hosted","self-hosted-windows"]'
+            SELF=true
+          else
+            LINUX='["ubuntu-latest"]'
+            WINDOWS='["windows-latest"]'
+            SELF=false
+          fi
+          echo "linux=$LINUX" >> "$GITHUB_OUTPUT"
+          echo "self=$SELF"   >> "$GITHUB_OUTPUT"
+          M=$(jq -cn --arg lx "$LINUX" '[{name:"linux-x64",runner:$lx}]')
+          if [ "$ENABLE_MSVC" = "true" ]; then
+            M=$(jq -c --arg w "$WINDOWS" '. + [{name:"windows-msvc",runner:$w}]' <<<"$M")
+          fi
+          if [ "$ENABLE_ARM" = "true" ]; then
+            M=$(jq -c '. + [{name:"linux-arm",runner:"[\"ubuntu-24.04-arm\"]"}]' <<<"$M")
+          fi
+          echo "cmake_matrix=$M" >> "$GITHUB_OUTPUT"
+
+  # POSIX developer workflow: the Makefile under both compilers, plus sanitizers.
+  posix:
+    needs: route
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx: [g++-14, clang++]
+    runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
+    steps:
+      - uses: ./.github/actions/setup-ecosystem-checkout
+        with:
+          deps: ${{ inputs.deps }}
+          sciforge-ref: ${{ inputs.sciforge-ref }}
+          ci-pat: ${{ secrets.ci-pat }}
+      # Hosted runners don't ship g++-14 by default; self-hosted is pre-provisioned.
+      - name: Install g++-14 (hosted only)
+        if: needs.route.outputs.self != 'true' && matrix.cxx == 'g++-14'
+        run: sudo apt-get update && sudo apt-get install -y g++-14
+      - name: Test
+        shell: bash
+        run: |
+          sub='${{ inputs.makefile-subdir }}'
+          dir="consumer${sub:+/$sub}"
+          make -C "$dir" test CXX=${{ matrix.cxx }} \
+            SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge-lint/include"
+      - name: Sanitizers (ASan + UBSan)
+        shell: bash
+        run: |
+          sub='${{ inputs.makefile-subdir }}'
+          dir="consumer${sub:+/$sub}"
+          make -C "$dir" sanitize CXX=${{ matrix.cxx }} \
+            SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge-lint/include"
+
+  # Portable build entry: x86-64 Linux (routed), Windows/MSVC (routed) and native
+  # AArch64 (always hosted), through CMake. Installs the dependency chain to a
+  # staging prefix, builds/tests/installs the consumer, then proves the installed
+  # config package with a standalone find_package smoke.
+  cmake:
+    needs: route
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: ${{ fromJSON(needs.route.outputs.cmake_matrix) }}
+    runs-on: ${{ fromJSON(matrix.leg.runner) }}
+    steps:
+      - uses: ./.github/actions/setup-ecosystem-checkout
+        with:
+          deps: ${{ inputs.deps }}
+          sciforge-ref: ${{ inputs.sciforge-ref }}
+          ci-pat: ${{ secrets.ci-pat }}
+      # One bash script across all OSes (Git bash is on PATH on the Windows runner);
+      # --config/-C Release covers the multi-config MSVC generator and no-ops on the
+      # single-config Linux ones. Every build/ and the shared _stage are removed
+      # first so a stale CMakeCache or a leftover install can't poison the run.
+      - name: Configure, build, test, install and find_package smoke
+        shell: bash
+        run: |
+          set -e
+          WS="$GITHUB_WORKSPACE"
+          HARNESS="$WS/sciforge-lint/include"
+          STAGE="$WS/_stage"
+          sub='${{ inputs.makefile-subdir }}'
+          proj="consumer${sub:+/$sub}"
+          rm -rf "$STAGE"
+          # Install the dependency chain (topological) so find_package(consumer)
+          # resolves it. Header-only: configure + install, no separate build needed.
+          mapfile -t DEPS < <(echo '${{ inputs.deps }}' | jq -r '.[].path')
+          for dep in "${DEPS[@]}"; do
+            rm -rf "$dep/build"
+            cmake -S "$dep" -B "$dep/build" -DCMAKE_BUILD_TYPE=Release \
+              -DSCIFORGE_INCLUDE_DIR="$HARNESS"
+            cmake --install "$dep/build" --config Release --prefix "$STAGE"
+          done
+          # Build, test and install the consumer (configure resolves deps as siblings).
+          rm -rf "$proj/build" "$proj/build-smoke"
+          cmake -S "$proj" -B "$proj/build" -DCMAKE_BUILD_TYPE=Release \
+            -DSCIFORGE_INCLUDE_DIR="$HARNESS"
+          cmake --build "$proj/build" --config Release
+          ctest --test-dir "$proj/build" -C Release --output-on-failure
+          cmake --install "$proj/build" --config Release --prefix "$STAGE"
+          # Downstream consumer: locate the package purely via find_package.
+          cmake -S "$proj/cmake/smoke" -B "$proj/build-smoke" -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$STAGE"
+          cmake --build "$proj/build-smoke" --config Release
+          ctest --test-dir "$proj/build-smoke" -C Release --output-on-failure

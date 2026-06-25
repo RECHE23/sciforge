@@ -57,14 +57,10 @@ jobs:
     needs: route
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
     steps:
-      - uses: actions/checkout@v6
+      # Shared checkout (consumer + SciForge lint/). Format needs no dep siblings.
+      - uses: ./.github/actions/setup-ecosystem-checkout
         with:
-          path: consumer
-      - uses: actions/checkout@v6
-        with:
-          repository: RECHE23/sciforge
-          ref: ${{ inputs.sciforge-ref }}
-          path: sciforge-lint
+          sciforge-ref: ${{ inputs.sciforge-ref }}
       # Hosted runners build the pinned Uncrustify (cached); self-hosted has it.
       - name: Cache Uncrustify 0.82.0
         if: needs.route.outputs.self != 'true'
@@ -95,32 +91,14 @@ jobs:
     needs: route
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
     steps:
-      - uses: actions/checkout@v6
+      # Shared checkout (consumer + dep siblings + SciForge lint/), idempotent on
+      # the persistent self-hosted workspace. The synthetic MISRA TU includes the
+      # dep headers, so the siblings must be present.
+      - uses: ./.github/actions/setup-ecosystem-checkout
         with:
-          path: consumer
-      - name: Checkout dependency siblings
-        if: inputs.deps != '[]'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.ci-pat }}
-        run: |
-          echo '${{ inputs.deps }}' | jq -c '.[]' | while read -r d; do
-            repo=$(echo "$d" | jq -r .repo)
-            path=$(echo "$d" | jq -r .path)
-            url="https://github.com/$repo.git"
-            if [ -n "${GH_TOKEN:-}" ]; then
-              url="https://x-access-token:$GH_TOKEN@github.com/$repo.git"
-            fi
-            # Idempotent: self-hosted runners reuse the workspace, so a leftover
-            # checkout from a previous run would make `git clone` fail. Remove first.
-            rm -rf "$path"
-            git clone --depth 1 "$url" "$path"
-          done
-      - uses: actions/checkout@v6
-        with:
-          repository: RECHE23/sciforge
-          ref: ${{ inputs.sciforge-ref }}
-          path: sciforge-lint
+          deps: ${{ inputs.deps }}
+          sciforge-ref: ${{ inputs.sciforge-ref }}
+          ci-pat: ${{ secrets.ci-pat }}
       # Pin clang-tidy to 18 on hosted so MISRA matches the local pre-check and the
       # self-hosted runners (also 18), and doesn't drift when the image bumps its
       # default. Self-hosted already has the pinned binary.

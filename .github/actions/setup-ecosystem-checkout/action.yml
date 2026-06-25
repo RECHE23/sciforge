@@ -1,0 +1,47 @@
+name: setup-ecosystem-checkout
+description: >
+  Checks out the calling consumer (at ./consumer), its dependency siblings (cloned
+  from a JSON list, public or private via ci-pat), and SciForge's lint/ + harness
+  (at ./sciforge-lint, pinned to sciforge-ref). The dependency clones are
+  idempotent — they rm -rf the target first — so this is safe on the persistent
+  self-hosted runner workspace (where a plain git clone would hit "already exists").
+  Shared by the lint-cpp and build-cpp reusable workflows so the checkout lives once.
+
+inputs:
+  deps:
+    description: 'JSON array of {repo, path} dependency siblings, in topological order.'
+    default: '[]'
+  sciforge-ref:
+    description: "SciForge tag/ref for the lint/ config + harness source."
+    required: true
+  ci-pat:
+    description: 'Token with read access for private dependency checkouts (optional).'
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v6
+      with:
+        path: consumer
+    - name: Checkout dependency siblings (idempotent)
+      if: inputs.deps != '[]'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.ci-pat }}
+      run: |
+        echo '${{ inputs.deps }}' | jq -c '.[]' | while read -r d; do
+          repo=$(echo "$d" | jq -r .repo)
+          path=$(echo "$d" | jq -r .path)
+          url="https://github.com/$repo.git"
+          if [ -n "${GH_TOKEN:-}" ]; then
+            url="https://x-access-token:$GH_TOKEN@github.com/$repo.git"
+          fi
+          rm -rf "$path"
+          git clone --depth 1 "$url" "$path"
+        done
+    - uses: actions/checkout@v6
+      with:
+        repository: RECHE23/sciforge
+        ref: ${{ inputs.sciforge-ref }}
+        path: sciforge-lint
