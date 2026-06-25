@@ -10,15 +10,16 @@ mirroring the pattern proven in REAL (Slice 1).
 
 | Consumer    | State                | Notes                                                        |
 |-------------|----------------------|--------------------------------------------------------------|
-| real-v1     | migrated ✓           | Slice 1 (`29fcd1f`, local reserve). 1st consumer.            |
+| real-v1     | **remote-wired ✓**   | CI fetches RECHE23/sciforge@v2026.6.0 (`bde48a2`, pushed, CI+Docs green 2026-06-25). Canary. |
 | scilex-v1   | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
 | sciparse-v1 | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
 | scilang-v1  | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
 | scinum-v1   | migrated ✓           | Slice 2. Body byte-identical (guard-only diff).             |
 
-State legend: **migrated ✓** = consumes SciForge, local copy removed, gate green.
-**sibling-coupled** = wired but not yet gated. **divergent-skip** = body differs
-from canonical; left on its own copy, see § Known divergences.
+State legend: **remote-wired ✓** = CI fetches SciForge from the remote tag, reserve
+pushed, CI green (fully decoupled). **migrated ✓** = consumes SciForge, local copy
+removed, local gate green (CI still sibling-coupled — remote-wire pending).
+**divergent-skip** = body differs from canonical; left on its own copy.
 
 ## Known divergences
 
