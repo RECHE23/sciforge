@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']   # release tags are just tags; there is no separate release workflow
+    paths-ignore: ['**.md']   # doc-only pushes do not need the matrix
+  pull_request:
+
+jobs:
+  # Formatting gate: the whole C++ tree must be Uncrustify-clean.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The pinned Uncrustify binary never changes, so cache it and rebuild from
+      # source only on a cache miss.
+      - name: Cache Uncrustify 0.82.0
+        id: uncrustify
+        uses: actions/cache@v5
+        with:
+          path: ~/.local/bin/uncrustify
+          key: uncrustify-0.82.0-${{ runner.os }}
+      - name: Build Uncrustify 0.82.0
+        if: steps.uncrustify.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake build-essential
+          curl -L -o uncrustify-src.tar.gz https://github.com/uncrustify/uncrustify/releases/download/uncrustify-0.82.0/uncrustify-0.82.0.tar.gz
+          tar -xzf uncrustify-src.tar.gz
+          cd uncrustify-uncrustify-0.82.0
+          mkdir build && cd build
+          cmake .. && cmake --build . -j
+          mkdir -p "$HOME/.local/bin" && cp uncrustify "$HOME/.local/bin/"
+      - name: Check formatting
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          make format-check
+
+  # Static analysis: clang-tidy over the self-test sources (validates .clang-tidy).
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - name: Lint
+        run: make lint
+
+  # Self-test on the POSIX developer workflow (the Makefile), both compilers.
+  posix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cxx: g++-14
+          - os: ubuntu-latest
+            cxx: clang++
+          - os: macos-latest
+            cxx: clang++
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Self-test (smoke + WILL_FAIL meta)
+        run: make test CXX=${{ matrix.cxx }}
+
+  # Self-test on Windows / MSVC, driven straight through CMake (bash ships on the
+  # Windows runner; --config/-C Release cover the multi-config MSVC generator).
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure, build and self-test (MSVC)
+        shell: bash
+        run: |
+          set -e
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+          ctest --test-dir build -C Release --output-on-failure
+
+  # Proves an EXTERNAL project consumes SciForge through CMake FetchContent on all
+  # three platforms (smoke + meta of the harness are covered above; this covers the
+  # integration surface: FetchContent + sciforge::test + the public include path).
+  dummy-consumer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and run the dummy consumer
+        shell: bash
+        run: |
+          set -e
+          cmake -S examples/dummy_consumer -B build-dummy -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-dummy --config Release
+          ctest --test-dir build-dummy -C Release --output-on-failure

@@ -16,9 +16,9 @@ ifeq ($(origin CXX),command line)
 CMAKE_CXX := -DCMAKE_CXX_COMPILER=$(CXX)
 endif
 
-FORMAT_FILES := $(shell find include tests -name '*.hpp' -o -name '*.cpp')
+FORMAT_FILES := $(shell find include tests examples -name '*.hpp' -o -name '*.cpp')
 
-.PHONY: all build test format format-check lint clean help
+.PHONY: all build test format format-check lint clean release help
 
 .DEFAULT_GOAL := help
 
@@ -31,6 +31,8 @@ help:
 	@echo "  make format-check  Uncrustify, dry-run, exits non-zero on diff"
 	@echo "  make lint          clang-tidy over the test sources"
 	@echo "  make clean         Remove build artifacts"
+	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
+	@echo "                     dry-run: make release DRY_RUN=1"
 	@echo ""
 	@echo "  Override the compiler: make test CXX=g++-14"
 
@@ -54,3 +56,27 @@ lint:
 
 clean:
 	rm -rf $(BUILD)
+
+# Cut a calendar-versioned release: vYYYY.M.PATCH where PATCH is the count of tags
+# already cut this calendar month (so the first ever is v2026.6.0). SciForge is
+# header-only infrastructure — a release is a git tag + push, nothing more (no
+# version bump, no PyPI). Hard guards refuse anything unsafe; `DRY_RUN=1` computes
+# and prints the version without touching git or the remote (works before the
+# repo has an 'origin', i.e. during local bring-up).
+release:
+	@branch=$$(git symbolic-ref --short HEAD 2>/dev/null); \
+	  test "$$branch" = main || { echo "release: must be on main (on '$$branch')"; exit 1; }
+	@test -z "$$(git status --porcelain)" || { echo "release: working tree not clean"; exit 1; }
+	@if [ -z "$(DRY_RUN)" ]; then \
+	   git remote get-url origin >/dev/null 2>&1 || { echo "release: no 'origin' remote"; exit 1; }; \
+	   git fetch --tags --quiet origin; \
+	 fi
+	@year=$$(date -u +%Y); month=$$(date -u +%m | sed 's/^0//'); \
+	  patch=$$(git tag -l "v$$year.$$month.*" | wc -l | tr -d ' '); \
+	  version="v$$year.$$month.$$patch"; \
+	  if git rev-parse -q --verify "refs/tags/$$version" >/dev/null; then \
+	    echo "release: tag $$version already exists"; exit 1; fi; \
+	  if [ -n "$(DRY_RUN)" ]; then echo "[dry-run] would tag and push $$version"; exit 0; fi; \
+	  echo "Releasing $$version"; \
+	  git tag "$$version"; \
+	  git push origin "$$version"
