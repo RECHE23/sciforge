@@ -47,10 +47,10 @@ test: build
 	$(CTEST) --test-dir $(BUILD) --output-on-failure
 
 format:
-	uncrustify -c uncrustify.cfg --replace --no-backup $(FORMAT_FILES)
+	uncrustify -c lint/uncrustify.cfg --replace --no-backup $(FORMAT_FILES)
 
 format-check:
-	uncrustify -c uncrustify.cfg --check $(FORMAT_FILES)
+	uncrustify -c lint/uncrustify.cfg --check $(FORMAT_FILES)
 
 lint:
 	@ls tests/*.cpp | xargs -P $(JOBS) -I{} clang-tidy {} -- -std=c++20 -Iinclude
