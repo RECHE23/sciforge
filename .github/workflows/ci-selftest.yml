@@ -15,7 +15,11 @@ jobs:
   lint-cpp:
     uses: ./.github/workflows/lint-cpp.yml
     with:
-      deps: '[]'                              # the fixture is a leaf
+      # The fixture is a leaf, but pass a harmless public dep so the dependency-
+      # checkout loop (jq parse, git clone, the idempotent rm -rf) is exercised here.
+      # (SciForge has no self-hosted runner — those are per-repo — so the self-hosted
+      # persistence path is validated on the first routed consumer, not here.)
+      deps: '[{"repo":"RECHE23/sciforge","path":"dep-probe"}]'
       sciforge-ref: ${{ github.sha }}         # lint/ from the commit under test
       runner-mode: hosted
       makefile-subdir: examples/lint_consumer
