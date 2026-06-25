@@ -1,7 +1,7 @@
 # SciForge
 
-Shared infrastructure for the scientific-computing ecosystem (REAL, SciLex,
-SciParse, SciLang, SciNum): the canonical C++ test harness at
+Shared infrastructure for a scientific-computing ecosystem: the canonical C++
+test harness at
 `<sciforge/test/framework.hpp>` (the header-only CMake target `sciforge::test`)
 and the shared lint configuration in `lint/`. SciForge is header-only
 infrastructure — it is **not** a runtime dependency and is never published to

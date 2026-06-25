@@ -34,13 +34,22 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.ci-pat }}
       run: |
-        echo '${{ inputs.deps }}' | jq -c '.[]' | while read -r d; do
-          repo=$(echo "$d" | jq -r .repo)
-          path=$(echo "$d" | jq -r .path)
-          url="https://github.com/$repo.git"
-          if [ -n "${GH_TOKEN:-}" ]; then
-            url="https://x-access-token:$GH_TOKEN@github.com/$repo.git"
-          fi
-          rm -rf "$path"
-          git clone --depth 1 "$url" "$path"
-        done
+        # jq-free parse: this step runs on the job runner, including self-hosted
+        # Windows where jq is not guaranteed. Split the compact JSON array into one
+        # object per line, then extract repo/path with sed. The deps JSON shape is
+        # caller-controlled: [{"repo":"...","path":"..."},...]. The
+        # `|| [ -n "$obj" ]` keeps the final object (no trailing newline after the
+        # split).
+        printf '%s' '${{ inputs.deps }}' \
+          | sed -e 's/^[[:space:]]*\[//' -e 's/\][[:space:]]*$//' -e 's/},[[:space:]]*{/}\n{/g' \
+          | while IFS= read -r obj || [ -n "$obj" ]; do
+              [ -z "$obj" ] && continue
+              repo=$(printf '%s' "$obj" | sed -n 's/.*"repo"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              path=$(printf '%s' "$obj" | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              url="https://github.com/$repo.git"
+              if [ -n "${GH_TOKEN:-}" ]; then
+                url="https://x-access-token:$GH_TOKEN@github.com/$repo.git"
+              fi
+              rm -rf "$path"
+              git clone --depth 1 "$url" "$path"
+            done

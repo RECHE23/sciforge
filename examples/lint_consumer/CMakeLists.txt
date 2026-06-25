@@ -1,7 +1,7 @@
 # Buildable leaf fixture for SciForge's reusable build-cpp self-test: a header-only
 # library with an installed config package (find_package) and a ctest test —
 # enough for build-cpp to configure/build/test/install/find, mirroring a real leaf
-# consumer (e.g. SciNum) at minimal size.
+# consumer (a numeric/utility library with no dependencies) at minimal size.
 cmake_minimum_required(VERSION 3.16)
 project(lintdemo VERSION 1.0.0 LANGUAGES CXX)
 

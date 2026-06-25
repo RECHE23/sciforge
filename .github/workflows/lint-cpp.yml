@@ -30,8 +30,10 @@ on:
       ci-pat:          { required: false }
 
 jobs:
-  # Emit the runner labels. 'routed' picks self-hosted only for the maintainer's
-  # own (non-PR) pushes; everything else stays on GitHub-hosted runners.
+  # Emit the runner labels. 'routed' picks self-hosted only when the repository
+  # owner pushes (a generic "the pusher owns this repo" gate, no hard-coded handle)
+  # and never for PRs; everything else stays on GitHub-hosted runners. Lint is
+  # Linux-only by nature (clang-tidy + uncrustify), so there is no platform matrix.
   route:
     runs-on: ubuntu-latest
     outputs:
@@ -43,9 +45,10 @@ jobs:
         env:
           MODE:  ${{ inputs.runner-mode }}
           ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
           EVENT: ${{ github.event_name }}
         run: |
-          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "RECHE23" ] && [ "$EVENT" != "pull_request" ]; then
+          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "$OWNER" ] && [ "$EVENT" != "pull_request" ]; then
             echo 'linux=["self-hosted","self-hosted-linux"]' >> "$GITHUB_OUTPUT"
             echo 'self=true'  >> "$GITHUB_OUTPUT"
           else

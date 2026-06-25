@@ -25,10 +25,12 @@ jobs:
       runner-mode: hosted
       makefile-subdir: examples/lint_consumer
 
-  # Exercise the reusable build spine: both posix compilers + sanitizers, and the
-  # full cmake matrix (linux-x64 + windows-msvc + arm) configure/build/test/install
-  # + find_package smoke against the buildable fixture. Leaf fixture (deps='[]'); the
-  # composite's clone loop is covered by the lint-cpp job above (same composite).
+  # Exercise the reusable build spine with EVERY platform toggle on (the selftest
+  # runs on GitHub-hosted runners, which include macOS): posix linux g++-14 +
+  # clang++ and macOS clang++ with sanitizers, and the full cmake matrix (linux-x64
+  # + windows-msvc + arm) configure/build/test/install + find_package smoke against
+  # the buildable fixture. Leaf fixture (deps='[]'); the composite's jq-free clone
+  # loop is covered by the lint-cpp job above (same composite).
   build-cpp:
     uses: ./.github/workflows/build-cpp.yml
     with:
@@ -36,3 +38,6 @@ jobs:
       sciforge-ref: ${{ github.sha }}
       runner-mode: hosted
       makefile-subdir: examples/lint_consumer
+      enable-macos: true
+      enable-windows-msvc: true
+      enable-arm: true

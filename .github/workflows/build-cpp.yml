@@ -29,8 +29,12 @@ name: build-cpp (reusable)
 #   runner-mode     'hosted' or 'routed' (self-hosted on the maintainer's pushes)
 #   makefile-subdir optional subdir under the checkout to build in (the self-test
 #                   fixture uses it; real consumers leave it empty)
-#   enable-msvc     include the Windows/MSVC cmake leg (default true)
-#   enable-arm      include the native AArch64 cmake leg (default true, always hosted)
+# Platform toggles — Linux is the always-on baseline (posix g++-14 + clang++,
+# cmake linux-x64); every other platform is opt-in so the spine encodes no
+# particular consumer's matrix. A consumer enables exactly the platforms it covers:
+#   enable-macos        add a macOS posix leg (test + sanitizers, Apple clang)
+#   enable-windows-msvc add the Windows/MSVC cmake leg
+#   enable-arm          add the native AArch64 cmake leg (always hosted)
 # secrets.ci-pat is only needed when a dependency is private.
 
 on:
@@ -39,35 +43,43 @@ on:
       deps:            { type: string,  default: '[]' }
       sciforge-ref:    { type: string,  required: true }
       runner-mode:     { type: string,  default: 'hosted' }
-      makefile-subdir: { type: string,  default: '' }
-      enable-msvc:     { type: boolean, default: true }
-      enable-arm:      { type: boolean, default: true }
+      makefile-subdir:     { type: string,  default: '' }
+      enable-macos:        { type: boolean, default: false }
+      enable-windows-msvc: { type: boolean, default: false }
+      enable-arm:          { type: boolean, default: false }
     secrets:
       ci-pat:          { required: false }
 
 jobs:
-  # Emit the Linux runner labels, the self-hosted flag, and the cmake matrix (a JSON
-  # array of {name, runner}; runner is a JSON-array string consumed via fromJSON).
-  # 'routed' picks self-hosted only for the maintainer's own (non-PR) pushes. The
-  # ARM leg is always hosted (no self-hosted AArch64); the Windows/ARM legs are
-  # included per the enable-msvc / enable-arm toggles.
+  # Emit the Linux runner labels, the self-hosted flag, and the posix + cmake
+  # matrices (JSON arrays of legs; each leg's runner is a JSON-array string consumed
+  # via fromJSON). All jq lives in this always-hosted job — the build legs read the
+  # matrices via fromJSON, so no jq ever runs on the (possibly self-hosted) build
+  # runners. 'routed' picks self-hosted only when the repository owner pushes (a
+  # generic "the pusher owns this repo" gate, no hard-coded handle), and never for
+  # PRs. Linux is the always-on baseline; the macOS/Windows-MSVC/ARM legs are added
+  # per the enable-* toggles. macOS and ARM are always hosted (no self-hosted
+  # equivalents).
   route:
     runs-on: ubuntu-latest
     outputs:
       linux:        ${{ steps.pick.outputs.linux }}
       self:         ${{ steps.pick.outputs.self }}
+      posix_matrix: ${{ steps.pick.outputs.posix_matrix }}
       cmake_matrix: ${{ steps.pick.outputs.cmake_matrix }}
     steps:
       - id: pick
         shell: bash
         env:
-          MODE:        ${{ inputs.runner-mode }}
-          ACTOR:       ${{ github.actor }}
-          EVENT:       ${{ github.event_name }}
-          ENABLE_MSVC: ${{ inputs.enable-msvc }}
-          ENABLE_ARM:  ${{ inputs.enable-arm }}
+          MODE:         ${{ inputs.runner-mode }}
+          ACTOR:        ${{ github.actor }}
+          OWNER:        ${{ github.repository_owner }}
+          EVENT:        ${{ github.event_name }}
+          ENABLE_MACOS: ${{ inputs.enable-macos }}
+          ENABLE_MSVC:  ${{ inputs.enable-windows-msvc }}
+          ENABLE_ARM:   ${{ inputs.enable-arm }}
         run: |
-          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "RECHE23" ] && [ "$EVENT" != "pull_request" ]; then
+          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "$OWNER" ] && [ "$EVENT" != "pull_request" ]; then
             LINUX='["self-hosted","self-hosted-linux"]'
             WINDOWS='["self-hosted","self-hosted-windows"]'
             SELF=true
@@ -78,6 +90,14 @@ jobs:
           fi
           echo "linux=$LINUX" >> "$GITHUB_OUTPUT"
           echo "self=$SELF"   >> "$GITHUB_OUTPUT"
+          # posix matrix: Linux baseline (g++-14 + clang++); optional macOS (Apple
+          # clang, always hosted). Each leg carries its own runner + compiler.
+          P=$(jq -cn --arg lx "$LINUX" '[{name:"linux-gcc",cxx:"g++-14",runner:$lx},{name:"linux-clang",cxx:"clang++",runner:$lx}]')
+          if [ "$ENABLE_MACOS" = "true" ]; then
+            P=$(jq -c '. + [{name:"macos-clang",cxx:"clang++",runner:"[\"macos-latest\"]"}]' <<<"$P")
+          fi
+          echo "posix_matrix=$P" >> "$GITHUB_OUTPUT"
+          # cmake matrix: Linux baseline (linux-x64); optional Windows/MSVC + ARM.
           M=$(jq -cn --arg lx "$LINUX" '[{name:"linux-x64",runner:$lx}]')
           if [ "$ENABLE_MSVC" = "true" ]; then
             M=$(jq -c --arg w "$WINDOWS" '. + [{name:"windows-msvc",runner:$w}]' <<<"$M")
@@ -87,14 +107,16 @@ jobs:
           fi
           echo "cmake_matrix=$M" >> "$GITHUB_OUTPUT"
 
-  # POSIX developer workflow: the Makefile under both compilers, plus sanitizers.
+  # POSIX developer workflow: the Makefile under each leg's compiler, plus
+  # sanitizers. Legs come from the route matrix (Linux g++-14 + clang++ baseline,
+  # optional macOS clang++).
   posix:
     needs: route
     strategy:
       fail-fast: false
       matrix:
-        cxx: [g++-14, clang++]
-    runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
+        leg: ${{ fromJSON(needs.route.outputs.posix_matrix) }}
+    runs-on: ${{ fromJSON(matrix.leg.runner) }}
     steps:
       # Bootstrap SciForge (lint/ + harness + the shared composite). A reusable
       # workflow can only reach a local action after its repo is checked out, so
@@ -109,23 +131,24 @@ jobs:
         with:
           deps: ${{ inputs.deps }}
           ci-pat: ${{ secrets.ci-pat }}
-      # Hosted runners don't ship g++-14 by default; self-hosted is pre-provisioned.
-      - name: Install g++-14 (hosted only)
-        if: needs.route.outputs.self != 'true' && matrix.cxx == 'g++-14'
+      # Hosted Linux runners don't ship g++-14 by default; self-hosted is
+      # pre-provisioned and the macOS leg uses Apple clang, so neither needs it.
+      - name: Install g++-14 (hosted Linux only)
+        if: needs.route.outputs.self != 'true' && matrix.leg.cxx == 'g++-14'
         run: sudo apt-get update && sudo apt-get install -y g++-14
       - name: Test
         shell: bash
         run: |
           sub='${{ inputs.makefile-subdir }}'
           dir="consumer${sub:+/$sub}"
-          make -C "$dir" test CXX=${{ matrix.cxx }} \
+          make -C "$dir" test CXX=${{ matrix.leg.cxx }} \
             SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge/include"
       - name: Sanitizers (ASan + UBSan)
         shell: bash
         run: |
           sub='${{ inputs.makefile-subdir }}'
           dir="consumer${sub:+/$sub}"
-          make -C "$dir" sanitize CXX=${{ matrix.cxx }} \
+          make -C "$dir" sanitize CXX=${{ matrix.leg.cxx }} \
             SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge/include"
 
   # Portable build entry: x86-64 Linux (routed), Windows/MSVC (routed) and native
@@ -169,8 +192,14 @@ jobs:
           rm -rf "$STAGE"
           # Install the dependency chain (topological) so find_package(consumer)
           # resolves it. Header-only: configure + install, no separate build needed.
-          mapfile -t DEPS < <(echo '${{ inputs.deps }}' | jq -r '.[].path')
-          for dep in "${DEPS[@]}"; do
+          # jq-free path extraction (this script may run on a self-hosted runner
+          # without jq): pull each "path" from the caller-controlled deps JSON with
+          # sed. Paths contain no spaces, so word-splitting the list is safe; an
+          # empty deps '[]' yields an empty list and the loop is skipped.
+          DEPS=$(printf '%s' '${{ inputs.deps }}' \
+            | sed -e 's/},[[:space:]]*{/}\n{/g' \
+            | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+          for dep in $DEPS; do
             rm -rf "$dep/build"
             cmake -S "$dep" -B "$dep/build" -DCMAKE_BUILD_TYPE=Release \
               -DSCIFORGE_INCLUDE_DIR="$HARNESS"
