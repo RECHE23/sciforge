@@ -41,3 +41,19 @@ jobs:
       enable-macos: true
       enable-windows-msvc: true
       enable-arm: true
+
+  # Exercise the reusable Python-binding spine with both platform toggles on (hosted
+  # runners have macOS + Windows): build the abi3 extension (pip install -e .) and run
+  # the unittest suite across {linux, macos, windows} x {3.10, 3.14} against the
+  # py_consumer fixture. Leaf (deps='[]'). The self-hosted-Windows venv path can't be
+  # exercised here (no SciForge self-hosted runner) — first proven at the scinum
+  # routed adoption, same gap as B1/B2.
+  python-cpp:
+    uses: ./.github/workflows/python-cpp.yml
+    with:
+      sciforge-ref: ${{ github.sha }}
+      deps: '[]'
+      runner-mode: hosted
+      project-subdir: examples/py_consumer
+      enable-macos: true
+      enable-windows: true

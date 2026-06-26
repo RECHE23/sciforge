@@ -1,0 +1,133 @@
+name: python-cpp (reusable)
+
+# Reusable Python-binding CI spine: build the abi3 extension (pip install -e .) and
+# run its stdlib-unittest suite across a {os, python} matrix. Unlike build-cpp (which
+# does cmake/make C++ and needs the SciForge harness), this builds the Python
+# extension and runs unittest — no cmake, no harness — but it still needs the
+# dependency siblings the binding compiles against, so it reuses the shared
+# setup-ecosystem-checkout composite (consumer at ./consumer, deps as siblings).
+#
+# Checkout: each job bootstraps SciForge to ./sciforge first (a reusable workflow can
+# only reach a local action after its repo is checked out — this makes the composite
+# resolvable), then the composite lands the consumer + dependency siblings.
+#
+# Inputs:
+#   python-versions JSON array of CPython versions, default ["3.10","3.14"]
+#   sciforge-ref    the SciForge tag the consumer pins (composite source)
+#   deps            JSON array of {repo, path} dependency siblings (binding headers)
+#   pre-install     extra pip packages to install before the build (e.g. "numpy"),
+#                   default '' (none)
+#   build-cmd       default 'python -m pip install -e .'
+#   test-cmd        default 'python -m unittest discover -s python/tests'
+#   runner-mode     'hosted' or 'routed' (self-hosted on the repo owner's pushes)
+#   project-subdir  optional subdir under the checkout holding pyproject.toml (the
+#                   self-test fixture uses it; real consumers leave it empty)
+# Platform toggles — Linux is the always-on baseline; macOS / Windows are opt-in:
+#   enable-macos    add macOS legs (always hosted)
+#   enable-windows  add Windows legs (self-hosted-windows when routed)
+# secrets.ci-pat is only needed when a dependency is private.
+
+on:
+  workflow_call:
+    inputs:
+      python-versions: { type: string,  default: '["3.10","3.14"]' }
+      sciforge-ref:    { type: string,  required: true }
+      deps:            { type: string,  default: '[]' }
+      pre-install:     { type: string,  default: '' }
+      build-cmd:       { type: string,  default: 'python -m pip install -e .' }
+      test-cmd:        { type: string,  default: 'python -m unittest discover -s python/tests' }
+      runner-mode:     { type: string,  default: 'hosted' }
+      project-subdir:  { type: string,  default: '' }
+      enable-macos:    { type: boolean, default: false }
+      enable-windows:  { type: boolean, default: false }
+    secrets:
+      ci-pat:          { required: false }
+
+jobs:
+  # Emit the self-hosted flag and the {os, py, runner} matrix (runner is a JSON-array
+  # string consumed via fromJSON). All jq lives in this always-hosted job; the python
+  # legs read the matrix via fromJSON. 'routed' picks self-hosted only when the repo
+  # owner pushes (non-PR). Linux is the always-on baseline; macOS (always hosted) and
+  # Windows (self-hosted-windows when routed) legs are added per the enable-* toggles.
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      self:      ${{ steps.pick.outputs.self }}
+      py_matrix: ${{ steps.pick.outputs.py_matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          MODE:           ${{ inputs.runner-mode }}
+          ACTOR:          ${{ github.actor }}
+          OWNER:          ${{ github.repository_owner }}
+          EVENT:          ${{ github.event_name }}
+          ENABLE_MACOS:   ${{ inputs.enable-macos }}
+          ENABLE_WINDOWS: ${{ inputs.enable-windows }}
+          PV:             ${{ inputs.python-versions }}
+        run: |
+          if [ "$MODE" = "routed" ] && [ "$ACTOR" = "$OWNER" ] && [ "$EVENT" != "pull_request" ]; then
+            LINUX='["self-hosted","self-hosted-linux"]'
+            WINDOWS='["self-hosted","self-hosted-windows"]'
+            SELF=true
+          else
+            LINUX='["ubuntu-latest"]'
+            WINDOWS='["windows-latest"]'
+            SELF=false
+          fi
+          echo "self=$SELF" >> "$GITHUB_OUTPUT"
+          M=$(jq -cn --argjson pv "$PV" --arg lx "$LINUX" '[$pv[] | {os:"linux", py:., runner:$lx}]')
+          if [ "$ENABLE_MACOS" = "true" ]; then
+            M=$(jq -c --argjson pv "$PV" '. + [$pv[] | {os:"macos", py:., runner:"[\"macos-latest\"]"}]' <<<"$M")
+          fi
+          if [ "$ENABLE_WINDOWS" = "true" ]; then
+            M=$(jq -c --argjson pv "$PV" --arg w "$WINDOWS" '. + [$pv[] | {os:"windows", py:., runner:$w}]' <<<"$M")
+          fi
+          echo "py_matrix=$M" >> "$GITHUB_OUTPUT"
+
+  python:
+    needs: route
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: ${{ fromJSON(needs.route.outputs.py_matrix) }}
+    runs-on: ${{ fromJSON(matrix.leg.runner) }}
+    steps:
+      # Bootstrap SciForge (provides the composite) then check out consumer + deps.
+      - uses: actions/checkout@v6
+        with:
+          repository: RECHE23/sciforge
+          ref: ${{ inputs.sciforge-ref }}
+          path: sciforge
+      - uses: ./sciforge/.github/actions/setup-ecosystem-checkout
+        with:
+          deps: ${{ inputs.deps }}
+          ci-pat: ${{ secrets.ci-pat }}
+      # Self-hosted Windows can't run setup-python (it needs HKLM access from a
+      # least-privileged service account); use the pre-installed interpreter in a
+      # fresh venv put first on PATH, so the shared steps below run against it.
+      - name: Use pre-installed Python via venv (self-hosted Windows)
+        if: needs.route.outputs.self == 'true' && matrix.leg.os == 'windows'
+        shell: bash
+        run: |
+          py -${{ matrix.leg.py }} -m venv "$RUNNER_TEMP/venv-${{ matrix.leg.py }}"
+          cygpath -w "$RUNNER_TEMP/venv-${{ matrix.leg.py }}/Scripts" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@v6
+        if: ${{ !(needs.route.outputs.self == 'true' && matrix.leg.os == 'windows') }}
+        with:
+          python-version: ${{ matrix.leg.py }}
+      - name: Build the binding
+        shell: bash
+        run: |
+          sub='${{ inputs.project-subdir }}'
+          cd "consumer${sub:+/$sub}"
+          python -m pip install --upgrade pip setuptools wheel
+          pre='${{ inputs.pre-install }}'
+          if [ -n "$pre" ]; then python -m pip install $pre; fi
+          ${{ inputs.build-cmd }}
+      - name: Test
+        shell: bash
+        run: |
+          sub='${{ inputs.project-subdir }}'
+          cd "consumer${sub:+/$sub}"
+          ${{ inputs.test-cmd }}
