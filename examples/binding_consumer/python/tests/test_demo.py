@@ -103,5 +103,36 @@ class CapsuleTest(unittest.TestCase):
             bindingdemo.handle_value(object())
 
 
+# --------------------------------------------------------------------------- N3a
+class ArgSyntaxTest(unittest.TestCase):
+    def test_scalar_default(self):
+        self.assertIs(bindingdemo.greater(5), True)         # n defaults to 0
+        self.assertIs(bindingdemo.greater(5, 10), False)    # positional
+        self.assertIs(bindingdemo.greater(5, n=10), False)  # keyword
+
+    def test_str_default(self):
+        self.assertEqual(bindingdemo.suffixed("hi"), "hi!")            # default '!'
+        self.assertEqual(bindingdemo.suffixed("hi", "?"), "hi?")       # positional
+        self.assertEqual(bindingdemo.suffixed("hi", suffix="?"), "hi?")  # keyword
+
+    def test_none_sentinel(self):
+        obj = object()
+        self.assertIs(bindingdemo.defaulted_to_none(obj), True)            # extra defaults to None
+        self.assertIs(bindingdemo.defaulted_to_none(obj, 5), False)        # positional
+        self.assertIs(bindingdemo.defaulted_to_none(obj, extra=5), False)  # keyword
+
+    def test_missing_required_is_typeerror(self):
+        with self.assertRaises(TypeError):
+            bindingdemo.greater()
+
+    def test_unknown_keyword_is_typeerror(self):
+        with self.assertRaises(TypeError):
+            bindingdemo.greater(5, nope=1)
+
+    def test_too_many_positional_is_typeerror(self):
+        with self.assertRaises(TypeError):
+            bindingdemo.greater(1, 2, 3)
+
+
 if __name__ == "__main__":
     unittest.main()
