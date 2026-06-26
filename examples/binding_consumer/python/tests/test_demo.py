@@ -134,5 +134,27 @@ class ArgSyntaxTest(unittest.TestCase):
             bindingdemo.greater(1, 2, 3)
 
 
+# ------------------------------------------------------------------ optional (Part A)
+class OptionalArgTest(unittest.TestCase):
+    def test_present_str_positional(self):
+        self.assertEqual(bindingdemo.maybe_len("abc", "wxyz"), 4)   # opt present -> len(opt)
+
+    def test_present_str_keyword(self):
+        self.assertEqual(bindingdemo.maybe_len("abc", opt="wxyz"), 4)
+
+    def test_absent_is_nullopt(self):
+        self.assertEqual(bindingdemo.maybe_len("abc"), 3)           # opt absent -> nullopt -> len(s)
+
+    def test_explicit_none_positional_is_nullopt(self):
+        self.assertEqual(bindingdemo.maybe_len("abc", None), 3)
+
+    def test_explicit_none_keyword_is_nullopt(self):
+        self.assertEqual(bindingdemo.maybe_len("abc", opt=None), 3)
+
+    def test_wrong_type_is_typeerror(self):
+        with self.assertRaises(TypeError):  # opt is neither str nor None -> caster<str> trips
+            bindingdemo.maybe_len("abc", 5)
+
+
 if __name__ == "__main__":
     unittest.main()

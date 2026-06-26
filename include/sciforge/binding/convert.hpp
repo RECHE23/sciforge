@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -195,6 +196,25 @@ namespace sciforge::binding {
         throw cast_error("invalid bytes");
       }
       return bytes_view{data, size};
+    }
+  };
+
+  // std::optional<T> (arg side) — None -> std::nullopt, otherwise caster<T>::from_python.
+  // The site: an optional argument that is "a T or None" and must stay plain C++. It
+  // composes with the arg-syntax None sentinel: an optional arg whose default is
+  // binding::none is materialized once to Py_None, so an absent OR an explicit None
+  // argument both arrive here as Py_None and become std::nullopt; any other value goes
+  // through caster<T>. The motivating sites are str-or-None options (scilang x5,
+  // sciparse 1, scinum asarray). to_python is intentionally absent: no return site
+  // produces an optional yet — add it the day one does (anti-cruft).
+  template <class T>
+  struct caster<std::optional<T>, void> {
+    static std::optional<T> from_python(PyObject* obj)
+    {
+      if (obj == Py_None) {
+        return std::nullopt;
+      }
+      return caster<T>::from_python(obj);
     }
   };
 

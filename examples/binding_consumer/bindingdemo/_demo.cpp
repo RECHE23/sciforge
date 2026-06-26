@@ -10,6 +10,7 @@
 #include <sciforge/binding/module.hpp>
 
 #include <new>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -187,6 +188,15 @@ namespace {
     (void)x;
     return extra == Py_None;
   }
+
+  // str-or-None optional via caster<std::optional<std::string>>: the byte length of opt
+  // when given, else of s (the None fallback). arg("opt") = none materializes Py_None, so
+  // an absent or explicit-None opt becomes std::nullopt.
+  long long   maybe_len(std::string                s,
+                        std::optional<std::string> opt)
+  {
+    return static_cast<long long>(opt ? opt->size() : s.size());
+  }
 }  // namespace
 
 // The handle caster (the documented per-binding pattern).
@@ -230,6 +240,8 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.def<&suffixed>("suffixed", "s, suffix='!' -> s+suffix", sb::arg("s"), sb::arg("suffix") = "!");
   m.def<&defaulted_to_none>("defaulted_to_none", "x, extra=None -> extra is None",
                             sb::arg("x"), sb::arg("extra") = sb::none);
+  m.def<&maybe_len>("maybe_len", "s, opt=None -> len(opt) if given else len(s)",
+                    sb::arg("s"), sb::arg("opt") = sb::none);
 
   // Negative compile-time proof: a specs/arity mismatch must NOT compile (the def's
   // static_assert). greater() takes two parameters; one arg() spec is a footgun
