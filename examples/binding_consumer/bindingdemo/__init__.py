@@ -1,18 +1,2 @@
-"""Re-export the N1 self-test binding surface (the extension's error type + funcs)."""
-from bindingdemo._demo import (
-    compute,
-    error,
-    raise_bad_alloc,
-    raise_runtime,
-    raise_unknown,
-    release_then_throw,
-)
-
-__all__ = [
-    "error",
-    "raise_runtime",
-    "raise_bad_alloc",
-    "raise_unknown",
-    "compute",
-    "release_then_throw",
-]
+"""Re-export the self-test binding surface (N1 helpers + the N2 dispatch demos)."""
+from bindingdemo._demo import *  # noqa: F401,F403  (the extension exposes error + all funcs)
