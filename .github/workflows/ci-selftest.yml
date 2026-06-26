@@ -57,3 +57,15 @@ jobs:
       project-subdir: examples/py_consumer
       enable-macos: true
       enable-windows: true
+
+  # Exercise the reusable release wheel-build spine: cibuildwheel (abi3) + sdist on
+  # the full 4-OS matrix against the py_consumer fixture, so any per-OS cibuildwheel
+  # issue is caught HERE before a publisher adopts it. Uses the default wheel-os.
+  # Limit: py_consumer is a leaf, so this proves the cibuildwheel mechanism + artifact
+  # upload, NOT the build-system.requires PyPI resolution (first proven at scilex,
+  # which pulls real-regex from PyPI at wheel-build time). check-version is a no-op
+  # here (this is a branch push, not a version tag).
+  build-wheels:
+    uses: ./.github/workflows/build-wheels.yml
+    with:
+      package-dir: examples/py_consumer

@@ -1,0 +1,78 @@
+name: build-wheels (reusable)
+
+# Reusable release wheel-build spine: build the abi3 wheels (cibuildwheel) + the
+# sdist and upload them as artifacts. BUILD-ONLY by design — it never publishes.
+# The publish step (PyPI Trusted Publishing / OIDC) stays in each consumer's
+# release.yml, because the OIDC token's workflow ref must match the trusted-publisher
+# configured on PyPI for the consumer's own release.yml; running publish inside this
+# reusable would change that ref and PyPI would reject it. So the consumer's
+# release.yml calls this for the build, then downloads these artifacts and publishes.
+#
+# No composite / token: cibuildwheel resolves C++ build dependencies from PyPI via
+# the project's build-system.requires (e.g. a binding that needs REAL's headers pulls
+# real-regex from PyPI at wheel-build time) — there are no sibling checkouts here.
+#
+# Inputs:
+#   package-dir       directory holding pyproject.toml, default '.' (the self-test
+#                     fixture points at a subdir; real consumers use the root)
+#   wheel-os          JSON array of runner OSes for the cibuildwheel matrix
+#   cibw-archs-macos  CIBW_ARCHS_MACOS, default "x86_64 arm64"
+#   cibw-environment  CIBW_ENVIRONMENT, default '' (none)
+
+on:
+  workflow_call:
+    inputs:
+      package-dir:      { type: string, default: '.' }
+      wheel-os:         { type: string, default: '["ubuntu-latest","ubuntu-24.04-arm","macos-latest","windows-latest"]' }
+      cibw-archs-macos: { type: string, default: 'x86_64 arm64' }
+      cibw-environment: { type: string, default: '' }
+
+jobs:
+  # Guard: on a version-tag push, the tag must match the pyproject version. On any
+  # other trigger (e.g. the SciForge self-test pushing to main) the check is skipped
+  # and the job passes — the build still runs, proving the mechanism.
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Tag matches pyproject version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          proj=$(grep -E '^version *=' "${{ inputs.package-dir }}/pyproject.toml" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag pyproject=$proj"
+          test "$tag" = "$proj" || { echo "::error::tag v$tag != pyproject version $proj"; exit 1; }
+
+  wheels:
+    needs: check-version
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.wheel-os) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build wheels (cibuildwheel, abi3)
+        shell: bash
+        run: pipx run cibuildwheel "${{ inputs.package-dir }}" --output-dir wheelhouse
+        env:
+          CIBW_ARCHS_MACOS: ${{ inputs.cibw-archs-macos }}
+          CIBW_ENVIRONMENT: ${{ inputs.cibw-environment }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  sdist:
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build sdist
+        shell: bash
+        run: pipx run build --sdist --outdir dist "${{ inputs.package-dir }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
