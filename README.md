@@ -42,6 +42,40 @@ target_link_libraries(my_tests PRIVATE sciforge::test)
 A worked external example lives in `examples/dummy_consumer/` (it uses
 `SOURCE_DIR` instead of a remote so it builds against the local tree).
 
+## Binding substrate (`sciforge/binding/`)
+
+SciForge also owns the **C++ binding substrate** — the proven helpers every abi3
+CPython binding in the ecosystem needs, at `include/sciforge/binding/` (namespace
+`sciforge::binding`, Limited-API only, cp310+):
+
+- **`error.hpp`** — `set_cpp_error(PyObject* error_type)` (the C++→Python exception
+  bridge: `bad_alloc`→`MemoryError`, `std::exception`→`error_type`, else internal
+  error) and `register_error(module, name, base = nullptr)`.
+- **`gil.hpp`** — `gil_release` (RAII, restores the GIL on every exit incl. a throw)
+  and `scoped_gil_release(bool above)` (release only above the consumer's threshold).
+
+Unlike the dev-only test harness, the binding substrate is a **substrate**: it
+compiles into each binding's abi3 `.so` and ships in the wheel. Two consumption paths
+reach the *same* headers:
+
+- **CMake** — link `sciforge::binding` for the include path, then
+  `#include <sciforge/binding/error.hpp>`.
+- **Python build** — depend on the build-time-only **`sciforge-build`** package
+  (`python/sciforge-build/`) and add `sciforge_build.get_include()` to your
+  extension's `include_dirs`:
+
+  ```toml
+  [build-system]
+  requires = ["setuptools>=68", "wheel", "sciforge-build"]
+  ```
+  ```python
+  import sciforge_build
+  Extension(..., include_dirs=[sciforge_build.get_include()])
+  ```
+
+  `sciforge-build` is **never a runtime dependency** — it only renders the headers at
+  wheel-build time.
+
 > **`v2026.6.0` is the bootstrap milestone:** it proves the inclusion mechanism
 > end to end. The reusable content is still deliberately minimal; it grows in
 > later slices.

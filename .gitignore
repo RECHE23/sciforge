@@ -4,3 +4,10 @@ build-*/
 .DS_Store
 .idea/
 .vscode/
+
+# Python build artifacts (sciforge-build vendoring + the binding self-test fixture)
+python/sciforge-build/sciforge_build/include/
+dist/
+*.egg-info/
+__pycache__/
+*.so

@@ -69,3 +69,33 @@ jobs:
     uses: ./.github/workflows/build-wheels.yml
     with:
       package-dir: examples/py_consumer
+
+  # N1 binding-substrate self-test (design (a)): build the build-time-only
+  # sciforge-build package INLINE, then build + test the binding fixture against it via
+  # --find-links — proving the off-sibling substrate delivery (set_cpp_error's three
+  # branches + the GIL above/below + the load-bearing restore-on-throw) without
+  # sciforge-build being on PyPI yet. Across Linux + macOS + Windows/MSVC — the early
+  # substrate-under-MSVC wiring, so N2/N3 (the templated casters) won't meet MSVC cold.
+  # Kept separate from python-cpp / build-wheels above, whose py_consumer fixture stays
+  # a PyPI-clean leaf.
+  binding-selftest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Build the build-time-only sciforge-build package
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --outdir dist python/sciforge-build
+      - name: Build + test the binding fixture against sciforge-build (off-PyPI, --find-links)
+        shell: bash
+        run: |
+          python -m pip install ./examples/binding_consumer --find-links dist
+          python -m unittest discover -s examples/binding_consumer/python/tests -v

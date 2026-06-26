@@ -1,0 +1,59 @@
+name: Release
+
+# Build the pure-Python `sciforge-build` distribution (the build-time-only binding
+# substrate headers) and publish it to PyPI on a version-tag push — same shape as the
+# ecosystem consumers' release.yml. Pure-Python py3-none-any via `python -m build`
+# (NOT cibuildwheel: there is no compiled extension). Publishing uses PyPI Trusted
+# Publishing (OIDC), no stored token.
+#
+# One-time PyPI Trusted Publisher to configure for the `sciforge-build` project:
+#   Owner: RECHE23   Repository: sciforge
+#   Workflow filename: release.yml
+#   Environment: pypi
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+jobs:
+  # Guard: on a version tag, the tag must match the sciforge-build version.
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Tag matches sciforge-build version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          proj=$(grep -E '^version *=' python/sciforge-build/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag sciforge-build=$proj"
+          test "$tag" = "$proj" || { echo "::error::tag v$tag != sciforge-build version $proj"; exit 1; }
+
+  build:
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build sdist + wheel (pure-Python, py3-none-any)
+        run: pipx run build --outdir dist python/sciforge-build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*
+
+  # Publishing stays here (not a reusable): the OIDC token's workflow ref must match
+  # the trusted-publisher configured on PyPI for this repo's own release workflow.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: pypi
+    permissions:
+      id-token: write   # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@v1.14.0

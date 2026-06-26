@@ -26,6 +26,18 @@ target_include_directories(sciforge_test INTERFACE
     $<INSTALL_INTERFACE:include>)
 target_compile_features(sciforge_test INTERFACE cxx_std_20)
 
+# Header-only binding substrate: consumers link sciforge::binding to get the include
+# path, then #include <sciforge/binding/error.hpp> / <.../gil.hpp>. Unlike the
+# dev-only test harness, this is a *substrate* (it compiles into each binding's abi3
+# .so); Python builds reach the same headers at build time via the build-time-only
+# `sciforge-build` package (python/sciforge-build/, sciforge_build.get_include()).
+add_library(sciforge_binding INTERFACE)
+add_library(sciforge::binding ALIAS sciforge_binding)
+target_include_directories(sciforge_binding INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_compile_features(sciforge_binding INTERFACE cxx_std_17)
+
 include(GNUInstallDirs)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 

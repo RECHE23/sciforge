@@ -1,0 +1,26 @@
+# sciforge-build — BUILD-TIME-ONLY distribution of the SciForge C++ binding-substrate
+# headers (<sciforge/binding/...>). It is NEVER a runtime dependency: a consumer lists
+# it in build-system.requires and adds sciforge_build.get_include() to its extension's
+# include_dirs at wheel-build time. Pure-Python, py3-none-any (built with
+# `python -m build`, not cibuildwheel). CalVer, aligned with the SciForge tag.
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sciforge-build"
+version = "2026.6.8"
+description = "Build-time C++ binding-substrate headers for the SciForge ecosystem (never a runtime dependency)."
+requires-python = ">=3.8"
+readme = "README.md"
+
+[project.urls]
+Homepage = "https://github.com/RECHE23/sciforge"
+
+[tool.setuptools]
+packages = ["sciforge_build"]
+
+[tool.setuptools.package-data]
+# The headers are vendored into the package by setup.py (copied from the repo's
+# canonical include/) so the wheel + sdist are self-contained and build off-sibling.
+sciforge_build = ["include/sciforge/binding/*.hpp"]

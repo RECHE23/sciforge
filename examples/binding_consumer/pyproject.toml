@@ -1,0 +1,19 @@
+# Real abi3 C++ binding fixture for SciForge's binding-substrate (N1) self-test: a
+# Py_LIMITED_API extension exercising sciforge::binding::{set_cpp_error,
+# register_error, gil_release, scoped_gil_release}. It builds against the substrate
+# headers via the build-time-only sciforge-build package (build-system.requires), so
+# the binding-selftest job proves the off-sibling substrate delivery. Kept SEPARATE
+# from examples/py_consumer (which stays a PyPI-clean leaf for the python-cpp /
+# build-wheels self-tests).
+[build-system]
+requires = ["setuptools>=68", "wheel", "sciforge-build"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bindingdemo"
+version = "0.0.1"
+description = "SciForge binding-substrate (N1) self-test fixture"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["bindingdemo"]

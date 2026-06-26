@@ -1,16 +1,16 @@
-# Minimal abi3 Python-binding fixture for SciForge's reusable python-cpp self-test:
-# a single Py_LIMITED_API extension function plus a stdlib-unittest suite, enough to
-# exercise build (pip install -e .) + test across the {os, python} matrix. The
-# [tool.cibuildwheel] block is inert here (B3a builds/tests only) but readies the
-# fixture for the build-wheels self-test (B3b). Leaf: no dependencies.
+# Minimal abi3 Python-binding fixture for SciForge's reusable python-cpp / build-wheels
+# self-tests: a single Py_LIMITED_API extension function plus a stdlib-unittest suite.
+# Deliberately a PyPI-CLEAN LEAF (no build dependencies) so those reusables are
+# exercised exactly as a real published leaf consumer would be. The N1 binding
+# substrate is exercised separately by examples/binding_consumer.
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydemo"
 version = "0.0.1"
-description = "Minimal abi3 binding fixture for SciForge's python-cpp self-test"
+description = "Minimal abi3 binding fixture for SciForge's python-cpp / build-wheels self-tests"
 requires-python = ">=3.10"
 
 [tool.setuptools]
