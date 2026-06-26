@@ -204,9 +204,11 @@ namespace sciforge::binding {
   // composes with the arg-syntax None sentinel: an optional arg whose default is
   // binding::none is materialized once to Py_None, so an absent OR an explicit None
   // argument both arrive here as Py_None and become std::nullopt; any other value goes
-  // through caster<T>. The motivating sites are str-or-None options (scilang x5,
-  // sciparse 1, scinum asarray). to_python is intentionally absent: no return site
-  // produces an optional yet — add it the day one does (anti-cruft).
+  // through caster<T>. The motivating site is an optional where None is a genuine value
+  // distinct from absent (e.g. scinum asarray's z=str-or-None). An optional that defaults
+  // to a concrete value instead (None must be rejected) uses caster<T> + arg(...)=literal,
+  // NOT this. to_python is intentionally absent: no return site produces an optional yet —
+  // add it the day one does (anti-cruft).
   template <class T>
   struct caster<std::optional<T>, void> {
     static std::optional<T> from_python(PyObject* obj)
