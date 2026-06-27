@@ -234,6 +234,11 @@ namespace {
     return Py_BuildValue("(LL)", g.w, g.h);
   }
 
+  std::string widget_repr(const Widget& g)      // __repr__ via def_repr (the tp_repr slot)
+  {
+    return "Widget(" + std::to_string(g.w) + ", " + std::to_string(g.h) + ")";
+  }
+
   Widget      make_widget(long long w,          // module fn -> Widget (exercises wrap)
                           long long h)
   {
@@ -330,6 +335,7 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.def<&triple>("triple", "n -> (n, n+1, n+2)");
   // N3b — a C++ type wrapped as a heap type, plus module functions that take/return it.
   m.type<Widget>("bindingdemo.Widget")
+  .def_repr<&widget_repr>()
   .def<&area>("area", "area() -> w*h")
   .def_prop_ro<&width>("width", "the width")
   .def_prop_ro<&widget_dims>("dims", "(w, h) as a tuple — a computed PyObject* property")

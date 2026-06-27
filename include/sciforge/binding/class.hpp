@@ -195,6 +195,24 @@ namespace sciforge::binding {
     }
   }
 
+  // The generated tp_repr: unwrap self and call repr(self) -> std::string. A reprfunc is a
+  // dedicated slot (CPython does NOT wire tp_repr from a __repr__ in tp_methods for a
+  // PyType_FromSpec heap type), so def_repr exists. An uninitialized instance reprs as a
+  // placeholder rather than raising (repr must not raise).
+  template <class T, PyObject* (*Getter)(), auto Repr>
+  PyObject* class_repr(PyObject* self)
+  {
+    try {
+      T&          self_obj = class_unwrap<T>(self);
+      std::string text     = Repr(self_obj);
+      return PyUnicode_FromStringAndSize(text.data(), static_cast<Py_ssize_t>(text.size()));
+    } catch (const cast_error&) {
+      return PyUnicode_FromString("<uninitialized>");
+    } catch (...) {
+      return set_cpp_error(Getter());
+    }
+  }
+
   namespace detail {
     // Call Factory(arg_0, ..., arg_n) from the parsed objects — the factory's parameters
     // map one-to-one to the constructor arguments (no leading self, unlike a method).
@@ -289,6 +307,14 @@ namespace sciforge::binding {
       return *this;
     }
 
+    // Wire __repr__ (the tp_repr slot) to a free function Repr(const T&) -> std::string.
+    template <auto Repr>
+    class_& def_repr()
+    {
+      repr_ = class_repr<T, Getter, Repr>;
+      return *this;
+    }
+
     class_& raw(const char* name,
                 PyCFunction func,
                 int         flags,
@@ -329,14 +355,17 @@ namespace sciforge::binding {
       finished_ = true;
       class_methods<T>().push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});
       class_getsets<T>().push_back(PyGetSetDef {nullptr, nullptr, nullptr, nullptr, nullptr});
-      // Up to six slots: dealloc/methods/getset, optionally tp_new+tp_init when constructible,
-      // then the terminator.
-      PyType_Slot  slots[6] = {};
+      // Up to seven slots: dealloc/methods/getset, optionally tp_repr, optionally
+      // tp_new+tp_init when constructible, then the terminator.
+      PyType_Slot  slots[7] = {};
       std::size_t  n        = 0;
       unsigned int flags    = Py_TPFLAGS_DEFAULT;
       slots[n++] = {Py_tp_dealloc, reinterpret_cast<void*>(class_dealloc<T>)};
       slots[n++] = {Py_tp_methods, static_cast<void*>(class_methods<T>().data())};
       slots[n++] = {Py_tp_getset, static_cast<void*>(class_getsets<T>().data())};
+      if (repr_ != nullptr) {
+        slots[n++] = {Py_tp_repr, reinterpret_cast<void*>(repr_)};
+      }
       if (init_ != nullptr) {
         slots[n++] = {Py_tp_new, reinterpret_cast<void*>(PyType_GenericNew)};
         slots[n++] = {Py_tp_init, reinterpret_cast<void*>(init_)};
@@ -358,6 +387,7 @@ namespace sciforge::binding {
 
     PyObject* module_   = nullptr;
     initproc  init_     = nullptr;        // set by def_init; null = factory-only
+    reprfunc  repr_     = nullptr;        // set by def_repr; null = default repr
     bool      finished_ = false;
   };
 }  // namespace sciforge::binding

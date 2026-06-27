@@ -200,6 +200,9 @@ class WidgetTest(unittest.TestCase):
     def test_raw_method(self):                      # the .raw escape hatch
         self.assertEqual(bindingdemo.make_widget(3, 4).describe(), "Widget(3, 4)")
 
+    def test_def_repr(self):                        # def_repr wires tp_repr
+        self.assertEqual(repr(bindingdemo.make_widget(3, 4)), "Widget(3, 4)")
+
     def test_module_fn_unwraps_arg(self):           # unwrap (from_python) on an arg
         self.assertEqual(bindingdemo.widget_perimeter(bindingdemo.make_widget(3, 4)), 14)
 
