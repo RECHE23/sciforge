@@ -156,6 +156,24 @@ class OptionalArgTest(unittest.TestCase):
             bindingdemo.maybe_len("abc", 5)
 
 
+# ------------------------------------------------------------------ tuple caster (S2)
+class TupleCasterTest(unittest.TestCase):
+    def test_heterogeneous_2_tuple(self):
+        result = bindingdemo.classify(4)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(result, (4, "even"))
+        self.assertIsInstance(result[0], int)
+        self.assertIsInstance(result[1], str)
+
+    def test_odd(self):
+        self.assertEqual(bindingdemo.classify(3), (3, "odd"))
+
+    def test_3_tuple(self):                          # the svd arity
+        result = bindingdemo.triple(10)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(result, (10, 11, 12))
+
+
 # ------------------------------------------------------------------ class_ (N3b)
 class WidgetTest(unittest.TestCase):
     def test_make_returns_wrapped_type(self):       # wrap (to_python)

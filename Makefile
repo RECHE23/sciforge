@@ -20,7 +20,9 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-config clean release help
+.PHONY: all build test format format-check lint lint-config binding-selftest-gpp clean release help
+
+PYTHON ?= python3
 
 .DEFAULT_GOAL := help
 
@@ -33,6 +35,7 @@ help:
 	@echo "  make format-check  Uncrustify, dry-run, exits non-zero on diff"
 	@echo "  make lint          clang-tidy over the test sources"
 	@echo "  make lint-config   Self-test the shared MISRA base (lint/clang-tidy-misra)"
+	@echo "  make binding-selftest-gpp  Build+run the binding fixture under g++ (clang/g++ divergence gate)"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
 	@echo "                     dry-run: make release DRY_RUN=1"
@@ -62,6 +65,22 @@ lint:
 # the documented deviations stay suppressed). Override the binary with CLANG_TIDY=.
 lint-config:
 	@CLANG_TIDY=$${CLANG_TIDY:-clang-tidy} lint/test/run.sh
+
+# Build + run the binding selftest fixture under g++ (not just clang), against the
+# working-tree headers, so clang/g++ divergences on the template substrate are caught
+# locally instead of only at the CI ubuntu-g++ leg. (S1 shipped a g++-only macro error that
+# the clang-only local gate missed; this closes that hole.) Prefers g++-14, then g++-13.
+binding-selftest-gpp:
+	@gpp=$$(command -v g++-14 || command -v g++-13 || command -v g++); \
+	 if [ -z "$$gpp" ]; then echo "binding-selftest-gpp: no g++ found (install g++-14/g++-13)"; exit 1; fi; \
+	 pyinc=$$($(PYTHON) -c 'import sysconfig; print(sysconfig.get_path("include"))'); \
+	 if [ "$$(uname -s)" = "Darwin" ]; then link="-bundle -undefined dynamic_lookup"; else link="-shared"; fi; \
+	 ext=examples/binding_consumer/bindingdemo/_demo.abi3.so; \
+	 echo "g++ selftest: $$gpp ($$(uname -s))"; \
+	 $$gpp -std=c++20 -O2 -fPIC $$link -Wall -Wextra -DPy_LIMITED_API=0x030A0000 \
+	   -Iinclude -I$$pyinc examples/binding_consumer/bindingdemo/_demo.cpp -o $$ext && \
+	 PYTHONPATH=examples/binding_consumer $(PYTHON) -m unittest discover -s examples/binding_consumer/python/tests; \
+	 status=$$?; rm -f $$ext; exit $$status
 
 clean:
 	rm -rf $(BUILD)

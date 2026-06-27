@@ -20,7 +20,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace sciforge::binding {
@@ -238,6 +240,47 @@ namespace sciforge::binding {
         PyList_SetItem(list, static_cast<Py_ssize_t>(i), element);     // steals element
       }
       return list;
+    }
+  };
+
+  // std::tuple<Ts...> -> tuple (return side; each element through its OWN caster — the
+  // heterogeneous analogue of the vector caster). The motivating site is a multi-value
+  // return (scinum's qr/eigh/svd). Taken BY VALUE and the elements MOVED into their casters,
+  // so a heavy element (a Tensor) is moved, not copied — parity with a hand-rolled wrap (one
+  // copy total). from_python is intentionally absent: no argument site takes a tuple yet —
+  // add it the day one does.
+  template <class ... Ts>
+  struct caster<std::tuple<Ts...>, void> {
+    static PyObject* to_python(std::tuple<Ts...> values)
+    {
+      PyObject* tuple = PyTuple_New(static_cast<Py_ssize_t>(sizeof...(Ts)));
+      if (tuple == nullptr) {
+        throw cast_error("could not allocate tuple");
+      }
+      set_all(tuple, std::move(values), std::index_sequence_for<Ts...> {});
+      return tuple;
+    }
+
+  private:
+
+    template <std::size_t... I>
+    static void set_all(PyObject*                 tuple,
+                        std::tuple<Ts...>&&       values,
+                        std::index_sequence<I...> /*seq*/)
+    {
+      (set_item<I>(tuple, std::move(std::get<I>(values))), ...);
+    }
+
+    template <std::size_t I, class U>
+    static void set_item(PyObject* tuple,
+                         U&&       value)
+    {
+      PyObject* element = caster<std::decay_t<U>>::to_python(std::forward<U>(value));
+      if (element == nullptr) {
+        Py_DECREF(tuple);                 // drops the already-set items too; unset slots are null
+        throw cast_error("could not convert tuple element");
+      }
+      PyTuple_SetItem(tuple, static_cast<Py_ssize_t>(I), element);     // steals element
     }
   };
 

@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 // The module error getter is defined by SCIFORGE_MODULE at the bottom; forward-declare
@@ -198,6 +199,18 @@ namespace {
     return static_cast<long long>(opt ? opt->size() : s.size());
   }
 
+  // caster<std::tuple<...>> (return side): a heterogeneous 2-tuple and a homogeneous
+  // 3-tuple (the arities scinum's qr/eigh/svd need). Each element goes through its own caster.
+  std::tuple<long long, std::string> classify(long long n)
+  {
+    return {n, n % 2 == 0 ? "even" : "odd"};
+  }
+
+  std::tuple<long long, long long, long long> triple(long long n)
+  {
+    return {n, n + 1, n + 2};
+  }
+
   // --------------------------------------------------------------------------- N3b
   // A plain C++ type wrapped as a heap type by class_<Widget>. The methods/properties are
   // free functions whose first parameter is the unwrapped instance (no member pointers).
@@ -282,6 +295,8 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
                             sb::arg("x"), sb::arg("extra") = sb::none);
   m.def<&maybe_len>("maybe_len", "s, opt=None -> len(opt) if given else len(s)",
                     sb::arg("s"), sb::arg("opt") = sb::none);
+  m.def<&classify>("classify", "n -> (n, 'even'/'odd')");
+  m.def<&triple>("triple", "n -> (n, n+1, n+2)");
   // N3b — a C++ type wrapped as a heap type, plus module functions that take/return it.
   m.type<Widget>("bindingdemo.Widget")
   .def<&area>("area", "area() -> w*h")
