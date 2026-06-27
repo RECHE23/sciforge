@@ -229,6 +229,11 @@ namespace {
     return g.w;
   }
 
+  PyObject*   widget_dims(const Widget& g)      // a computed PyObject* property (a tuple)
+  {
+    return Py_BuildValue("(LL)", g.w, g.h);
+  }
+
   Widget      make_widget(long long w,          // module fn -> Widget (exercises wrap)
                           long long h)
   {
@@ -327,6 +332,7 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.type<Widget>("bindingdemo.Widget")
   .def<&area>("area", "area() -> w*h")
   .def_prop_ro<&width>("width", "the width")
+  .def_prop_ro<&widget_dims>("dims", "(w, h) as a tuple — a computed PyObject* property")
   .raw("describe", widget_describe, METH_NOARGS, "a manual repr (the .raw escape hatch)");
   m.def<&make_widget>("make_widget", "w, h -> Widget");
   m.def<&widget_perimeter>("widget_perimeter", "Widget -> 2*(w+h)");

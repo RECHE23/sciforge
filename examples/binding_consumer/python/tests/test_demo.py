@@ -186,6 +186,12 @@ class WidgetTest(unittest.TestCase):
     def test_property_ro(self):                     # def_prop_ro
         self.assertEqual(bindingdemo.make_widget(3, 4).width, 3)
 
+    def test_computed_pyobject_property(self):      # def_prop_ro returning PyObject* (a tuple)
+        dims = bindingdemo.make_widget(3, 4).dims
+        self.assertIsInstance(dims, tuple)          # a real tuple, built by the getter
+        self.assertEqual(dims, (3, 4))
+        self.assertEqual(bindingdemo.make_widget(3, 4).dims, (3, 4))  # repeatable (passthrough, no over-ref)
+
     def test_property_is_read_only(self):
         w = bindingdemo.make_widget(3, 4)
         with self.assertRaises(AttributeError):

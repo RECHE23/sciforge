@@ -169,13 +169,24 @@ namespace sciforge::binding {
   }
 
   // The generated getter for a computed read-only property: unwrap self, call getter(self).
+  // A getter returning a plain C++ value goes through its caster; a getter returning PyObject*
+  // (a computed dict/tuple no value-caster can build, e.g. a shape tuple or an array-interface
+  // dict) already owns a new reference and is returned directly — routing it through
+  // caster<PyObject*> would Py_NewRef and leak.
   template <class T, PyObject* (*Getter)(), auto Get>
   PyObject* property_getter(PyObject* self,
                             void* /*closure*/)
   {
     try {
       T& self_obj = class_unwrap<T>(self);
-      return caster<std::decay_t<decltype(Get(self_obj))>>::to_python(Get(self_obj));
+      using R     = std::decay_t<decltype(Get(self_obj))>;
+      if constexpr (std::is_same_v<R, PyObject*>) {
+        return Get(self_obj); // contract: a PyObject*-returning getter returns a NEW ref (the
+                              // getset protocol), passed straight through — never a borrowed one
+      }
+      else {
+        return caster<R>::to_python(Get(self_obj));
+      }
     } catch (const cast_error& err) {
       PyErr_SetString(PyExc_TypeError, err.what());
       return nullptr;
