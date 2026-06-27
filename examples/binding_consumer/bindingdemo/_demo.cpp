@@ -247,6 +247,31 @@ namespace {
     const Widget& g = *reinterpret_cast<sb::wrapper<Widget>*>(self)->held;
     return PyUnicode_FromFormat("Widget(%lld, %lld)", g.w, g.h);
   }
+
+  // A Python-constructible wrapped type via .def_init (mirrors scinum Tensor's arg shape:
+  // a required arg, an optional-None arg through the optional caster, and a str default).
+  struct Vec {
+    long long   x;
+    long long   scale;
+    std::string label;
+  };
+
+  Vec         make_vec(long long                  x,        // Vec(x, scale=None, label="v")
+                       std::optional<long long>   scale,
+                       std::string                label)
+  {
+    return Vec {x, scale.value_or(1), label};
+  }
+
+  long long   vec_total(const Vec& v)
+  {
+    return v.x * v.scale;
+  }
+
+  std::string vec_label(const Vec& v)
+  {
+    return v.label;
+  }
 }  // namespace
 
 // The handle caster (the documented per-binding pattern).
@@ -265,8 +290,9 @@ namespace sciforge::binding {
   };
 }  // namespace sciforge::binding
 
-// The wrapped-type caster (one line per class_<T>): Widget <-> bindingdemo.Widget.
+// The wrapped-type casters (one line per class_<T>).
 SCIFORGE_WRAPPED(Widget)
+SCIFORGE_WRAPPED(Vec)
 
 SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
 {
@@ -304,6 +330,11 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   .raw("describe", widget_describe, METH_NOARGS, "a manual repr (the .raw escape hatch)");
   m.def<&make_widget>("make_widget", "w, h -> Widget");
   m.def<&widget_perimeter>("widget_perimeter", "Widget -> 2*(w+h)");
+  // N3b — a Python-constructible type (.def_init with optional/keyword args).
+  m.type<Vec>("bindingdemo.Vec")
+  .def_init<&make_vec>(sb::arg("x"), sb::arg("scale") = sb::none, sb::arg("label") = "v")
+  .def<&vec_total>("total", "x * scale")
+  .def_prop_ro<&vec_label>("label", "the label");
 
   // Negative compile-time proof: a specs/arity mismatch must NOT compile (the def's
   // static_assert). greater() takes two parameters; one arg() spec is a footgun

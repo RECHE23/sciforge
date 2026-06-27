@@ -206,5 +206,37 @@ class WidgetTest(unittest.TestCase):
             bindingdemo.Widget()
 
 
+# ------------------------------------------------------------------ def_init (S3a)
+class DefInitTest(unittest.TestCase):
+    def test_required_only_defaults(self):          # Vec(x) -> scale=None->1, label="v"
+        v = bindingdemo.Vec(3)
+        self.assertIsInstance(v, bindingdemo.Vec)
+        self.assertEqual(v.total(), 3)
+        self.assertEqual(v.label, "v")
+
+    def test_positional(self):                       # Vec(x, scale)
+        self.assertEqual(bindingdemo.Vec(3, 5).total(), 15)
+
+    def test_keyword(self):                          # Vec(x, scale=, label=)
+        v = bindingdemo.Vec(3, scale=5, label="hi")
+        self.assertEqual(v.total(), 15)
+        self.assertEqual(v.label, "hi")
+
+    def test_keyword_skips_optional(self):           # label given, scale omitted -> None->1
+        self.assertEqual(bindingdemo.Vec(4, label="z").total(), 4)
+
+    def test_explicit_none_scale(self):              # scale=None -> optional caster -> 1
+        self.assertEqual(bindingdemo.Vec(7, scale=None).total(), 7)
+
+    def test_missing_required_is_typeerror(self):
+        with self.assertRaises(TypeError):
+            bindingdemo.Vec()
+
+    def test_reinit_is_tolerated(self):              # __init__ re-callable (held deleted first)
+        v = bindingdemo.Vec(3, 5)
+        v.__init__(2, 4)
+        self.assertEqual(v.total(), 8)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -82,7 +82,11 @@ namespace sciforge::binding {
       PyErr_Clear();
       throw cast_error(std::string("expected a ") + class_name<T>());
     }
-    return *reinterpret_cast<wrapper<T>*>(obj)->held;
+    T* held = reinterpret_cast<wrapper<T>*>(obj)->held;
+    if (held == nullptr) {                                   // __new__ without __init__
+      throw cast_error(std::string("uninitialized ") + class_name<T>());
+    }
+    return *held;
   }
 
   // Wrap a C++ value in a new instance (a fresh heap copy owned by the object).
@@ -180,6 +184,58 @@ namespace sciforge::binding {
     }
   }
 
+  namespace detail {
+    // Call Factory(arg_0, ..., arg_n) from the parsed objects — the factory's parameters
+    // map one-to-one to the constructor arguments (no leading self, unlike a method).
+    template <auto Factory, std::size_t... I>
+    auto invoke_factory(PyObject* const*          objs,
+                        std::index_sequence<I...> /*seq*/)
+    {
+      using traits = function_traits<decltype(Factory)>;
+      return Factory(caster<typename traits::template arg<I>>::from_python(objs[I])...);
+    }
+  }  // namespace detail
+
+  // tp_init for a constructible wrapped type: parse the keyword arguments (the N3a arg-syntax
+  // kw_spec), call the factory, and store its result as the held T — deleting any previous one
+  // so __init__ stays re-callable.
+  template <class T, PyObject* (*Getter)(), auto Factory>
+  int class_init(PyObject* self,
+                 PyObject* args,
+                 PyObject* kwds)
+  {
+    using traits             = function_traits<decltype(Factory)>;
+    constexpr std::size_t kN                     = traits::arity;
+    kw_spec&              spec                   = kw_spec_for<Factory>();
+    PyObject*             objs[kN == 0 ? 1 : kN] = {};
+    if (detail::parse_kw(args, kwds, spec.format.c_str(), spec.kwlist.data(), objs,
+                         std::make_index_sequence<kN> {}) == 0) {
+      return -1;
+    }
+    for (std::size_t i = 0; i < kN; ++i) {
+      if (objs[i] == nullptr) {
+        objs[i] = spec.defaults[i];
+      }
+    }
+    try {
+      T           value = detail::invoke_factory<Factory>(objs, std::make_index_sequence<kN> {});
+      // Build the new held BEFORE deleting the old one (strong guarantee): if the allocation
+      // throws on re-__init__, the existing held stays intact rather than dangling. At first
+      // __init__ held is null, so the delete is a no-op.
+      T*          fresh = new T(std::move(value));
+      wrapper<T>* w     = reinterpret_cast<wrapper<T>*>(self);
+      delete w->held;
+      w->held = fresh;
+      return 0;
+    } catch (const cast_error& err) {
+      PyErr_SetString(PyExc_TypeError, err.what());
+      return -1;
+    } catch (...) {
+      set_cpp_error(Getter());
+      return -1;
+    }
+  }
+
   // The builder. Methods/properties accumulate into the per-T tables; the heap type is
   // created (and added to the module) once, when the builder is finalized at the end of its
   // full expression — so the usual one-statement chain just works:
@@ -231,6 +287,27 @@ namespace sciforge::binding {
       return *this;
     }
 
+    // Make the type constructible from Python: Type(args...) parses through the N3a arg-syntax
+    // (positional + keyword/optional), calls Factory (a free function returning T), and stores
+    // the result. Without this, the type is factory-only (DISALLOW_INSTANTIATION).
+    template <auto Factory, class Spec0, class ... Specs>
+    class_& def_init(Spec0    spec0,
+                     Specs... specs)
+    {
+      using traits = function_traits<decltype(Factory)>;
+      static_assert(std::is_same_v<typename traits::return_type, T>,
+                    "def_init's factory must return the wrapped type T");
+      static_assert(1 + sizeof...(Specs) == traits::arity,
+                    "the number of arg() specifications must match the factory's parameter count");
+      kw_spec& spec = kw_spec_for<Factory>();
+      spec          = kw_spec {};
+      add_arg(spec, spec0);
+      (add_arg(spec, specs), ...);
+      spec.kwlist.push_back(nullptr);
+      init_ = class_init<T, Getter, Factory>;
+      return *this;
+    }
+
   private:
 
     void finish()
@@ -241,15 +318,24 @@ namespace sciforge::binding {
       finished_ = true;
       class_methods<T>().push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});
       class_getsets<T>().push_back(PyGetSetDef {nullptr, nullptr, nullptr, nullptr, nullptr});
-      PyType_Slot slots[] = {
-        {Py_tp_dealloc, reinterpret_cast<void*>(class_dealloc<T>)},
-        {Py_tp_methods, static_cast<void*>(class_methods<T>().data())},
-        {Py_tp_getset, static_cast<void*>(class_getsets<T>().data())},
-        {0, nullptr},
-      };
-      PyType_Spec spec {class_name<T>(), static_cast<int>(sizeof(wrapper<T>)), 0,
-                        Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION, slots};
-      PyObject* type = PyType_FromSpec(&spec);
+      // Up to six slots: dealloc/methods/getset, optionally tp_new+tp_init when constructible,
+      // then the terminator.
+      PyType_Slot  slots[6] = {};
+      std::size_t  n        = 0;
+      unsigned int flags    = Py_TPFLAGS_DEFAULT;
+      slots[n++] = {Py_tp_dealloc, reinterpret_cast<void*>(class_dealloc<T>)};
+      slots[n++] = {Py_tp_methods, static_cast<void*>(class_methods<T>().data())};
+      slots[n++] = {Py_tp_getset, static_cast<void*>(class_getsets<T>().data())};
+      if (init_ != nullptr) {
+        slots[n++] = {Py_tp_new, reinterpret_cast<void*>(PyType_GenericNew)};
+        slots[n++] = {Py_tp_init, reinterpret_cast<void*>(init_)};
+      }
+      else {
+        flags |= Py_TPFLAGS_DISALLOW_INSTANTIATION; // factory-only: no Python construction
+      }
+      slots[n] = {0, nullptr};
+      PyType_Spec spec {class_name<T>(), static_cast<int>(sizeof(wrapper<T>)), 0, flags, slots};
+      PyObject*   type = PyType_FromSpec(&spec);
       if (type == nullptr) {
         return; // a Python error is set; PyInit propagates it via the module attribute add
       }
@@ -260,6 +346,7 @@ namespace sciforge::binding {
     }
 
     PyObject* module_   = nullptr;
+    initproc  init_     = nullptr;        // set by def_init; null = factory-only
     bool      finished_ = false;
   };
 }  // namespace sciforge::binding
