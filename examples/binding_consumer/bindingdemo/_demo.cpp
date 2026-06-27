@@ -197,6 +197,43 @@ namespace {
   {
     return static_cast<long long>(opt ? opt->size() : s.size());
   }
+
+  // --------------------------------------------------------------------------- N3b
+  // A plain C++ type wrapped as a heap type by class_<Widget>. The methods/properties are
+  // free functions whose first parameter is the unwrapped instance (no member pointers).
+  struct Widget {
+    long long w;
+    long long h;
+  };
+
+  long long   area(const Widget& g)             // method:  w.area()
+  {
+    return g.w * g.h;
+  }
+
+  long long   width(const Widget& g)            // property: w.width
+  {
+    return g.w;
+  }
+
+  Widget      make_widget(long long w,          // module fn -> Widget (exercises wrap)
+                          long long h)
+  {
+    return Widget {w, h};
+  }
+
+  long long   widget_perimeter(const Widget& g) // module fn taking Widget (exercises unwrap)
+  {
+    return 2 * (g.w + g.h);
+  }
+
+  PyObject*   widget_describe(PyObject* self,   // a .raw method (the escape hatch)
+                              PyObject* /*args*/)
+  {
+    // self is a Widget instance (the method lives on the Widget type); read it directly.
+    const Widget& g = *reinterpret_cast<sb::wrapper<Widget>*>(self)->held;
+    return PyUnicode_FromFormat("Widget(%lld, %lld)", g.w, g.h);
+  }
 }  // namespace
 
 // The handle caster (the documented per-binding pattern).
@@ -214,6 +251,9 @@ namespace sciforge::binding {
     }
   };
 }  // namespace sciforge::binding
+
+// The wrapped-type caster (one line per class_<T>): Widget <-> bindingdemo.Widget.
+SCIFORGE_WRAPPED(Widget);
 
 SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
 {
@@ -242,6 +282,13 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
                             sb::arg("x"), sb::arg("extra") = sb::none);
   m.def<&maybe_len>("maybe_len", "s, opt=None -> len(opt) if given else len(s)",
                     sb::arg("s"), sb::arg("opt") = sb::none);
+  // N3b — a C++ type wrapped as a heap type, plus module functions that take/return it.
+  m.type<Widget>("bindingdemo.Widget")
+  .def<&area>("area", "area() -> w*h")
+  .def_prop_ro<&width>("width", "the width")
+  .raw("describe", widget_describe, METH_NOARGS, "a manual repr (the .raw escape hatch)");
+  m.def<&make_widget>("make_widget", "w, h -> Widget");
+  m.def<&widget_perimeter>("widget_perimeter", "Widget -> 2*(w+h)");
 
   // Negative compile-time proof: a specs/arity mismatch must NOT compile (the def's
   // static_assert). greater() takes two parameters; one arg() spec is a footgun

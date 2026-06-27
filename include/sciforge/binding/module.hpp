@@ -12,6 +12,7 @@
 
 #include <Python.h>
 
+#include <sciforge/binding/class.hpp>
 #include <sciforge/binding/dispatch.hpp>
 #include <sciforge/binding/error.hpp>
 
@@ -25,8 +26,18 @@ namespace sciforge::binding {
   class module_builder {
   public:
 
-    explicit module_builder(std::vector<PyMethodDef>& table) : table_(table)
+    module_builder(std::vector<PyMethodDef>& table,
+                   PyObject*                 module) : table_(table), module_(module)
     {}
+
+    // Wrap a C++ type T as a heap type and add it to the module. The returned builder
+    // accumulates the type's methods/properties and creates the type when it finalizes (at
+    // the end of its full expression), so the usual one-statement chain just works.
+    template <class T>
+    class_<T, Getter> type(const char* qualified_name)
+    {
+      return class_<T, Getter> {qualified_name, module_};
+    }
 
     template <auto Func>
     module_builder& def(const char* name,
@@ -60,6 +71,7 @@ namespace sciforge::binding {
   private:
 
     std::vector<PyMethodDef>& table_;
+    PyObject*                 module_;
   };
 }  // namespace sciforge::binding
 
@@ -89,7 +101,8 @@ namespace sciforge::binding {
             return nullptr;                                                                     \
           }                                                                                       \
           static std::vector<PyMethodDef> sciforge_module_table;                                  \
-          ::sciforge::binding::module_builder<&sciforge_module_error> m(sciforge_module_table);   \
+          ::sciforge::binding::module_builder<&sciforge_module_error> m(sciforge_module_table,    \
+                                                                        module);                  \
           sciforge_module_register(m);                                                            \
           sciforge_module_table.push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});            \
           if (PyModule_AddFunctions(module, sciforge_module_table.data()) < 0) {                  \

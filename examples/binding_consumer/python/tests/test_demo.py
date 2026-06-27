@@ -156,5 +156,37 @@ class OptionalArgTest(unittest.TestCase):
             bindingdemo.maybe_len("abc", 5)
 
 
+# ------------------------------------------------------------------ class_ (N3b)
+class WidgetTest(unittest.TestCase):
+    def test_make_returns_wrapped_type(self):       # wrap (to_python)
+        w = bindingdemo.make_widget(3, 4)
+        self.assertIsInstance(w, bindingdemo.Widget)
+
+    def test_method_self_unwrap(self):              # method dispatch (self -> T&)
+        self.assertEqual(bindingdemo.make_widget(3, 4).area(), 12)
+
+    def test_property_ro(self):                     # def_prop_ro
+        self.assertEqual(bindingdemo.make_widget(3, 4).width, 3)
+
+    def test_property_is_read_only(self):
+        w = bindingdemo.make_widget(3, 4)
+        with self.assertRaises(AttributeError):
+            w.width = 9
+
+    def test_raw_method(self):                      # the .raw escape hatch
+        self.assertEqual(bindingdemo.make_widget(3, 4).describe(), "Widget(3, 4)")
+
+    def test_module_fn_unwraps_arg(self):           # unwrap (from_python) on an arg
+        self.assertEqual(bindingdemo.widget_perimeter(bindingdemo.make_widget(3, 4)), 14)
+
+    def test_wrong_type_to_module_fn_is_typeerror(self):
+        with self.assertRaises(TypeError):
+            bindingdemo.widget_perimeter("not a widget")
+
+    def test_direct_instantiation_disallowed(self):
+        with self.assertRaises(TypeError):
+            bindingdemo.Widget()
+
+
 if __name__ == "__main__":
     unittest.main()
