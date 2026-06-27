@@ -253,7 +253,7 @@ namespace sciforge::binding {
 }  // namespace sciforge::binding
 
 // The wrapped-type caster (one line per class_<T>): Widget <-> bindingdemo.Widget.
-SCIFORGE_WRAPPED(Widget);
+SCIFORGE_WRAPPED(Widget)
 
 SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
 {

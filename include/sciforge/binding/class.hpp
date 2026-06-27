@@ -265,17 +265,21 @@ namespace sciforge::binding {
 }  // namespace sciforge::binding
 
 // Bridge a wrapped type T <-> its heap type as a per-argument caster: from_python unwraps a
-// borrowed reference (valid for the call), to_python wraps a new copy. Write it once next to
-// the class_<T> registration. T must be the exact type passed to class_<T>.
+// borrowed reference (valid for the call), to_python wraps a new copy. Expands to a
+// namespace-scoped specialization (a standard explicit specialization must be defined inside
+// its template's namespace, not via a global-qualified name — g++ rejects the latter). Write
+// it once, at namespace scope, next to the class_<T> registration; no trailing semicolon.
 #define SCIFORGE_WRAPPED(T)                                                  \
-        template <>                                                                 \
-        struct ::sciforge::binding::caster<T> {                                     \
-          static T&        from_python(PyObject * obj)                               \
-          {                                                                         \
-            return ::sciforge::binding::class_unwrap<T>(obj);                       \
-          }                                                                         \
-          static PyObject* to_python(T value)                                       \
-          {                                                                         \
-            return ::sciforge::binding::class_wrap<T>(std::move(value));            \
-          }                                                                         \
+        namespace sciforge::binding {                                               \
+          template <>                                                               \
+          struct caster<T> {                                                        \
+            static T&        from_python(PyObject * obj)                             \
+            {                                                                       \
+              return class_unwrap<T>(obj);                                          \
+            }                                                                       \
+            static PyObject* to_python(T value)                                     \
+            {                                                                       \
+              return class_wrap<T>(std::move(value));                              \
+            }                                                                       \
+          };                                                                        \
         }
