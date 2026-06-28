@@ -20,7 +20,7 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest clean release help
+.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest bench-cpp-selftest clean release help
 
 PYTHON ?= python3
 
@@ -37,6 +37,7 @@ help:
 	@echo "  make lint-config   Self-test the shared MISRA base (lint/clang-tidy-misra)"
 	@echo "  make binding-selftest-gpp  Build+run the binding fixture under g++ (clang/g++ divergence gate)"
 	@echo "  make bench-selftest  Run the sciforge.bench substrate selftests (stats + schema)"
+	@echo "  make bench-cpp-selftest  Build the C++ collector selftest (clang+g++) + Python round-trip"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
 	@echo "                     dry-run: make release DRY_RUN=1"
@@ -89,6 +90,26 @@ binding-selftest-gpp:
 # to the in-tree package (the same sibling layout consumers use via ../sciforge/python).
 bench-selftest:
 	PYTHONPATH=python $(PYTHON) -m unittest discover -s python/sciforge/bench/tests -p 'test_*.py'
+
+# Selftest the C++ raw collector (include/sciforge/bench.hpp). Compiles tests/bench_emit.cpp
+# under clang AND g++ (closing the clang/g++ gap on the templates, like binding-selftest-gpp),
+# runs the in-process C++ assertions, and pipes the emitted Run JSON into the Python checker
+# (tests/bench_roundtrip.py reads it back with sciforge.bench.run_from_json) — proving the
+# exact schema.run_to_json contract. The g++ leg is best-effort (skipped when absent).
+bench-cpp-selftest:
+	@mkdir -p $(BUILD)
+	@gpp=$$(command -v g++-14 || command -v g++-13 || command -v g++ || true); \
+	 status=0; \
+	 for cxx in $${CXX:-c++} $$gpp; do \
+	   [ -z "$$cxx" ] && continue; \
+	   echo "bench-cpp-selftest: $$cxx"; \
+	   "$$cxx" -std=c++20 -O2 -Iinclude tests/bench_emit.cpp -o $(BUILD)/bench_emit || { status=1; break; }; \
+	   if $(BUILD)/bench_emit > $(BUILD)/bench_emit.out 2>&1; then cat $(BUILD)/bench_emit.out; \
+	   else echo "  C++ asserts FAILED:"; cat $(BUILD)/bench_emit.out; status=1; break; fi; \
+	   PYTHONPATH=python $(PYTHON) tests/bench_roundtrip.py < $(BUILD)/bench_emit.out || { status=1; break; }; \
+	 done; \
+	 rm -f $(BUILD)/bench_emit $(BUILD)/bench_emit.out; \
+	 if [ $$status -eq 0 ]; then echo "bench-cpp-selftest: OK"; else echo "bench-cpp-selftest: FAIL"; exit 1; fi
 
 clean:
 	rm -rf $(BUILD)
