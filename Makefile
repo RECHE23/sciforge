@@ -20,7 +20,7 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-config binding-selftest-gpp clean release help
+.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest clean release help
 
 PYTHON ?= python3
 
@@ -36,6 +36,7 @@ help:
 	@echo "  make lint          clang-tidy over the test sources"
 	@echo "  make lint-config   Self-test the shared MISRA base (lint/clang-tidy-misra)"
 	@echo "  make binding-selftest-gpp  Build+run the binding fixture under g++ (clang/g++ divergence gate)"
+	@echo "  make bench-selftest  Run the sciforge.bench substrate selftests (stats + schema)"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
 	@echo "                     dry-run: make release DRY_RUN=1"
@@ -81,6 +82,13 @@ binding-selftest-gpp:
 	   -Iinclude -I$$pyinc examples/binding_consumer/bindingdemo/_demo.cpp -o $$ext && \
 	 PYTHONPATH=examples/binding_consumer $(PYTHON) -m unittest discover -s examples/binding_consumer/python/tests; \
 	 status=$$?; rm -f $$ext; exit $$status
+
+# Selftest the dev-only benchmark substrate (python/sciforge/bench): pure-stdlib stats and
+# the exchange schema. Selftest-first — the substrate is proven here before any consumer
+# (real-regex, scinum) leans on it. PYTHONPATH=python makes `import sciforge.bench` resolve
+# to the in-tree package (the same sibling layout consumers use via ../sciforge/python).
+bench-selftest:
+	PYTHONPATH=python $(PYTHON) -m unittest discover -s python/sciforge/bench/tests -p 'test_*.py'
 
 clean:
 	rm -rf $(BUILD)
