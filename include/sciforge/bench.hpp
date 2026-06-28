@@ -43,7 +43,10 @@ namespace sciforge::bench {
 #if defined(__GNUC__) || defined(__clang__)
     // Take the address ("g" with &value) so it works for class types (std::string, …), not
     // just scalars; the "memory" clobber forbids reordering the producing work across it.
-    asm volatile ("" : : "g" (&value) : "memory");
+    // The __asm__ __volatile__ spelling (reserved-identifier form) is the one GCC documents for
+    // -std/-pedantic code: plain `asm volatile` with operands is a GNU extension that -Wpedantic
+    // rejects, and scilex compiles its bench with -Wpedantic -Werror.
+    __asm__ __volatile__ ("" : : "g" (&value) : "memory");
 #else
     // Best-effort portable fallback (e.g. MSVC): force a volatile read of the object's bytes
     // and a compiler-only fence. Not exercised in CI — see the file-level gate note.
