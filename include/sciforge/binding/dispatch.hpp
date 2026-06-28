@@ -67,9 +67,10 @@ namespace sciforge::binding {
     using traits             = function_traits<decltype(Func)>;
     constexpr std::size_t kN = traits::arity;
     try {
-      if (PyTuple_Size(args) != static_cast<Py_ssize_t>(kN)) {
+      const Py_ssize_t given = PyTuple_Size(args);
+      if (given != static_cast<Py_ssize_t>(kN)) {
         throw cast_error("expected " + std::to_string(kN) + " argument(s), got " +
-                         std::to_string(PyTuple_Size(args)));
+                         std::to_string(given));
       }
       return detail::invoke<Func>(args, std::make_index_sequence<kN>{});
     } catch (const cast_error& err) {
@@ -117,22 +118,30 @@ namespace sciforge::binding {
     }
   };
 
-  // Resolve a default to a Python object (new ref, or the borrowed Py_None singleton).
+  // Resolve a default to an OWNED Python reference (every branch, including None). On an
+  // allocation failure the conversion returns nullptr; we set MemoryError and propagate the
+  // nullptr — never throw, since this runs inside the extern "C" PyInit where a C++ exception
+  // crossing the boundary is undefined behaviour. Uniform ownership is what lets def() safely
+  // Py_XDECREF the stored defaults on a re-import (a borrowed None there would over-decref).
   template <class T>
   inline PyObject* default_object(T value)
   {
     if constexpr (std::is_same_v<T, none_t>) {
-      return Py_None;
-    }
-    else if constexpr (std::is_same_v<T, const char*>) {
-      return PyUnicode_FromString(value);
-    }
-    else if constexpr (std::is_floating_point_v<T>) {
-      return PyFloat_FromDouble(static_cast<double>(value));
+      return Py_NewRef(Py_None); // owned, not the borrowed singleton
     }
     else {
-      static_assert(std::is_integral_v<T>, "unsupported default-argument type");
-      return PyLong_FromLongLong(static_cast<long long>(value));
+      PyObject* obj = nullptr;
+      if constexpr (std::is_same_v<T, const char*>) {
+        obj = PyUnicode_FromString(value);
+      }
+      else if constexpr (std::is_floating_point_v<T>) {
+        obj = PyFloat_FromDouble(static_cast<double>(value));
+      }
+      else {
+        static_assert(std::is_integral_v<T>, "unsupported default-argument type");
+        obj = PyLong_FromLongLong(static_cast<long long>(value));
+      }
+      return obj != nullptr ? obj : PyErr_NoMemory(); // PyErr_NoMemory sets MemoryError, returns nullptr
     }
   }
 
@@ -216,7 +225,10 @@ namespace sciforge::binding {
     }
     for (std::size_t i = 0; i < kN; ++i) {
       if (objs[i] == nullptr) {
-        objs[i] = spec.defaults[i];
+        objs[i] = spec.defaults[i]; // an absent optional uses its stored owned default
+      }
+      if (objs[i] == nullptr) {
+        return PyErr_NoMemory();    // a default that failed to allocate at registration (OOM)
       }
     }
     try {
@@ -241,11 +253,18 @@ namespace sciforge::binding {
     // of bounds and the all-'O' format disagrees with parse_kw's pointer count (UB).
     static_assert(1 + sizeof...(Specs) == function_traits<decltype(Func)>::arity,
                   "the number of arg() specifications must match the function's parameter count");
-    kw_spec& spec    = kw_spec_for<Func>();
-    spec             = kw_spec {};
+    kw_spec& spec = kw_spec_for<Func>();
+    for (PyObject* owned : spec.defaults) {
+      Py_XDECREF(owned); // release the previous defaults (a re-import re-registers); nullptr is a no-op
+    }
+    spec = kw_spec {};
     add_arg(spec, spec0);
     (add_arg(spec, specs), ...);
     spec.kwlist.push_back(nullptr); // NULL-terminate the kwlist
+    // The two-step cast (-> void(*)() -> PyCFunction) is the standard CPython idiom for storing
+    // a METH_KEYWORDS function (signature self,args,kwargs) in a PyCFunction slot: a direct cast
+    // between unrelated function-pointer types is ill-formed, so we route through void(*)() (as
+    // CPython's own PyCFunction_NewEx and pybind11 do; ~14 sites across the ecosystem).
     return PyMethodDef {name,
                         reinterpret_cast<PyCFunction>(reinterpret_cast<void (*)()>(call_wrapper_kw<Getter, Func>)),
                         METH_VARARGS | METH_KEYWORDS, doc};

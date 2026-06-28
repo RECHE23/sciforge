@@ -214,6 +214,14 @@ class WidgetTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             bindingdemo.Widget()
 
+    def test_double_register_is_inert_and_safe(self):  # B1: re-register guard
+        # The module registers Widget twice; the second registration must be inert (no new
+        # method) and must not realloc/dangle the live table — so the type still works.
+        w = bindingdemo.make_widget(3, 4)
+        self.assertEqual(w.area(), 12)              # first type intact (no dangling tp_methods)
+        self.assertEqual(w.width, 3)
+        self.assertFalse(hasattr(w, "area_again"))  # the second .def was a no-op
+
 
 # ------------------------------------------------------------------ def_init (S3a)
 class DefInitTest(unittest.TestCase):

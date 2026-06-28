@@ -101,9 +101,14 @@ namespace sciforge::binding {
             return nullptr;                                                                     \
           }                                                                                       \
           static std::vector<PyMethodDef> sciforge_module_table;                                  \
+          sciforge_module_table.clear();  /* a sub-interpreter re-import re-registers; start fresh */ \
           ::sciforge::binding::module_builder<&sciforge_module_error> m(sciforge_module_table,    \
                                                                         module);                  \
           sciforge_module_register(m);                                                            \
+          if (PyErr_Occurred() != nullptr) { /* a default failed to allocate during registration */ \
+            Py_DECREF(module);                                                                  \
+            return nullptr;                                                                     \
+          }                                                                                       \
           sciforge_module_table.push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});            \
           if (PyModule_AddFunctions(module, sciforge_module_table.data()) < 0) {                  \
             Py_DECREF(module);                                                                  \

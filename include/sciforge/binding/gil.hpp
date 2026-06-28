@@ -12,30 +12,9 @@
 
 namespace sciforge::binding {
 
-  // Release the GIL for the lifetime of the object; restore it on destruction (every
-  // path, including stack unwinding from a throw).
-  class gil_release {
-  public:
-
-    gil_release() : saved_(PyEval_SaveThread())
-    {}
-    ~gil_release()
-    {
-      PyEval_RestoreThread(saved_);
-    }
-
-    gil_release(const gil_release&)            = delete;
-    gil_release& operator=(const gil_release&) = delete;
-    gil_release(gil_release&&)                 = delete;
-    gil_release& operator=(gil_release&&)      = delete;
-
-  private:
-
-    PyThreadState* saved_;
-  };
-
-  // Release the GIL only when `above` is true (the consumer's threshold test); below
-  // it the GIL is simply kept — releasing/re-acquiring would dominate a tiny scan.
+  // Release the GIL only when `above` is true (the consumer's threshold test); below it the
+  // GIL is simply kept — releasing/re-acquiring would dominate a tiny scan. Restores on every
+  // exit, including stack unwinding from a throw (the load-bearing RAII guarantee).
   class scoped_gil_release {
   public:
 
@@ -58,5 +37,15 @@ namespace sciforge::binding {
   private:
 
     PyThreadState* saved_;
+  };
+
+  // Always release the GIL for the object's lifetime. Reuses scoped_gil_release's mechanism
+  // (including restore-on-throw) but exposes only the no-argument form — "always release" is
+  // its contract, so the bool overload stays hidden.
+  class gil_release : public scoped_gil_release {
+  public:
+
+    gil_release() : scoped_gil_release(true)
+    {}
   };
 }  // namespace sciforge::binding

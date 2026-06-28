@@ -150,10 +150,12 @@ namespace test {
         test_case.function();
       }
       catch (const std::exception& ex) {
-        detail::report_failure(test_case.name, 0, std::string("unexpected exception: ") + ex.what());
+        // No source location for an exception escaping the test body; the test name is already
+        // shown via [current_test], so the file field is a placeholder.
+        detail::report_failure("[unknown]", 0, std::string("unexpected exception: ") + ex.what());
       }
       catch (...) {
-        detail::report_failure(test_case.name, 0, "unexpected non-standard exception");
+        detail::report_failure("[unknown]", 0, "unexpected non-standard exception");
       }
       if (detail::current_failed) {
         ++tests_failed;

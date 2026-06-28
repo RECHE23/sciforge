@@ -152,6 +152,13 @@ namespace sciforge::binding {
     return std::string_view(data, static_cast<std::size_t>(size));
   }
 
+  // Shared str-out path: a new str from a UTF-8 byte range (std::string / std::string_view).
+  inline PyObject* to_python_utf8(const char* data,
+                                  std::size_t size)
+  {
+    return PyUnicode_FromStringAndSize(data, static_cast<Py_ssize_t>(size));
+  }
+
   template <>
   struct caster<std::string_view> {
     // A10: the view borrows the str's buffer — it must NOT escape the call.
@@ -162,7 +169,7 @@ namespace sciforge::binding {
 
     static PyObject*         to_python(std::string_view value)
     {
-      return PyUnicode_FromStringAndSize(value.data(), static_cast<Py_ssize_t>(value.size()));
+      return to_python_utf8(value.data(), value.size());
     }
   };
 
@@ -175,7 +182,7 @@ namespace sciforge::binding {
 
     static PyObject*   to_python(const std::string& value)
     {
-      return PyUnicode_FromStringAndSize(value.data(), static_cast<Py_ssize_t>(value.size()));
+      return to_python_utf8(value.data(), value.size());
     }
   };
 

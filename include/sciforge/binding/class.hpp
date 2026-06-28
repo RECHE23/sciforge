@@ -243,7 +243,11 @@ namespace sciforge::binding {
     }
     for (std::size_t i = 0; i < kN; ++i) {
       if (objs[i] == nullptr) {
-        objs[i] = spec.defaults[i];
+        objs[i] = spec.defaults[i]; // an absent optional uses its stored owned default
+      }
+      if (objs[i] == nullptr) {
+        PyErr_NoMemory();           // a default that failed to allocate at registration (OOM)
+        return -1;
       }
     }
     try {
@@ -277,6 +281,13 @@ namespace sciforge::binding {
            PyObject*   module)
       : module_(module)
     {
+      // A second registration of the same T (a sub-interpreter re-import) must NOT touch the
+      // tables that back the already-created type — appending would realloc the static and
+      // dangle the pointers the first PyType_FromSpec captured. The whole builder goes inert
+      // (every def* below, and finish, are no-ops on the tables); finish reuses the type.
+      if (class_type<T>() != nullptr) {
+        return;
+      }
       class_name<T>()    = qualified_name;
       class_methods<T>() = {};
       class_getsets<T>() = {};
@@ -294,6 +305,9 @@ namespace sciforge::binding {
     class_& def(const char* name,
                 const char* doc = nullptr)
     {
+      if (class_type<T>() != nullptr) {
+        return *this; // inert on a re-import: no push_back, no realloc of the live table
+      }
       class_methods<T>().push_back(PyMethodDef {name, call_method<T, Getter, Func>, METH_VARARGS, doc});
       return *this;
     }
@@ -302,6 +316,9 @@ namespace sciforge::binding {
     class_& def_prop_ro(const char* name,
                         const char* doc = nullptr)
     {
+      if (class_type<T>() != nullptr) {
+        return *this;
+      }
       class_getsets<T>().push_back(
         PyGetSetDef {name, property_getter<T, Getter, Get>, nullptr, const_cast<char*>(doc), nullptr});
       return *this;
@@ -311,6 +328,9 @@ namespace sciforge::binding {
     template <auto Repr>
     class_& def_repr()
     {
+      if (class_type<T>() != nullptr) {
+        return *this;
+      }
       repr_ = class_repr<T, Getter, Repr>;
       return *this;
     }
@@ -320,6 +340,9 @@ namespace sciforge::binding {
                 int         flags,
                 const char* doc = nullptr)
     {
+      if (class_type<T>() != nullptr) {
+        return *this;
+      }
       class_methods<T>().push_back(PyMethodDef {name, func, flags, doc});
       return *this;
     }
@@ -336,8 +359,14 @@ namespace sciforge::binding {
                     "def_init's factory must return the wrapped type T");
       static_assert(1 + sizeof...(Specs) == traits::arity,
                     "the number of arg() specifications must match the factory's parameter count");
+      if (class_type<T>() != nullptr) {
+        return *this; // inert on a re-import: keep the existing factory's kw_spec untouched
+      }
       kw_spec& spec = kw_spec_for<Factory>();
-      spec          = kw_spec {};
+      for (PyObject* owned : spec.defaults) {
+        Py_XDECREF(owned); // release the previous defaults on a re-import; nullptr is a no-op
+      }
+      spec = kw_spec {};
       add_arg(spec, spec0);
       (add_arg(spec, specs), ...);
       spec.kwlist.push_back(nullptr);
@@ -349,10 +378,19 @@ namespace sciforge::binding {
 
     void finish()
     {
-      if (finished_ || class_type<T>() != nullptr) {
+      if (finished_) {
         return;
       }
-      finished_ = true;
+      finished_        = true;
+      const char* dot  = std::strrchr(class_name<T>(), '.');
+      const char* attr = (dot != nullptr) ? dot + 1 : class_name<T>();
+      if (class_type<T>() != nullptr) {
+        // Re-import: reuse the existing type — the new module gets it, no rebuild (a rebuild
+        // would dangle the first type's table pointers). A failed add sets PyErr; PyInit's
+        // PyErr_Occurred guard then propagates it.
+        PyModule_AddObjectRef(module_, attr, class_type<T>());
+        return;
+      }
       class_methods<T>().push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});
       class_getsets<T>().push_back(PyGetSetDef {nullptr, nullptr, nullptr, nullptr, nullptr});
       // Up to seven slots: dealloc/methods/getset, optionally tp_repr, optionally
@@ -375,14 +413,15 @@ namespace sciforge::binding {
       }
       slots[n] = {0, nullptr};
       PyType_Spec spec {class_name<T>(), static_cast<int>(sizeof(wrapper<T>)), 0, flags, slots};
-      PyObject*   type = PyType_FromSpec(&spec);
+      PyObject  * type = PyType_FromSpec(&spec);
       if (type == nullptr) {
         return; // a Python error is set; PyInit propagates it via the module attribute add
       }
-      class_type<T>()  = type;
-      const char* dot  = std::strrchr(class_name<T>(), '.');
-      const char* attr = (dot != nullptr) ? dot + 1 : class_name<T>();
-      PyModule_AddObjectRef(module_, attr, type);
+      class_type<T>() = type;
+      if (PyModule_AddObjectRef(module_, attr, type) < 0) {
+        Py_CLEAR(class_type<T>()); // rollback: drop the type — neither registered nor orphaned
+        return;                    // PyErr is set; PyInit returns nullptr
+      }
     }
 
     PyObject* module_   = nullptr;

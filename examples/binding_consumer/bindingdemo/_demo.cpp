@@ -340,6 +340,11 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   .def_prop_ro<&width>("width", "the width")
   .def_prop_ro<&widget_dims>("dims", "(w, h) as a tuple — a computed PyObject* property")
   .raw("describe", widget_describe, METH_NOARGS, "a manual repr (the .raw escape hatch)");
+  // B1 proof: a SECOND registration of the same type. Without the inert-on-re-register guard,
+  // this .def would append to the live method table and realloc it, dangling the pointer the
+  // first PyType_FromSpec captured (UB). The guard makes it a no-op (no "area_again" appears),
+  // and the already-created Widget stays fully usable — proven by WidgetTest.
+  m.type<Widget>("bindingdemo.Widget").def<&area>("area_again");
   m.def<&make_widget>("make_widget", "w, h -> Widget");
   m.def<&widget_perimeter>("widget_perimeter", "Widget -> 2*(w+h)");
   // N3b — a Python-constructible type (.def_init with optional/keyword args).
