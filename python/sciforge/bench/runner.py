@@ -28,6 +28,28 @@ def fmt(seconds, width=0):
     return f"{seconds * 1e3:{width}.2f} ms"
 
 
+def calibrate(fn, batch_target=0.005):
+    """Warm `fn`, then size an inner batch so one batch lasts about `batch_target` seconds.
+
+    Two calls (a warmup, then a timed one) — enough to discard first-call effects and pick a
+    batch that amortises `perf_counter` overhead. Shared by :func:`collect` and the paired
+    collector so both size their loops identically.
+    """
+    fn()  # warm up: discard first-call effects (imports, lazy init, cold caches)
+    start = perf_counter()
+    fn()
+    once = max(perf_counter() - start, 1e-9)
+    return max(1, int(batch_target / once))
+
+
+def batch_time(fn, n):
+    """Per-call time of `fn`, averaged over an inner loop of `n` calls."""
+    start = perf_counter()
+    for _ in range(n):
+        fn()
+    return (perf_counter() - start) / n
+
+
 def collect(label, fn, samples=40, batch_target=0.005):
     """Time `fn` into a raw-sample :class:`Case` (per-operation seconds).
 
@@ -38,17 +60,8 @@ def collect(label, fn, samples=40, batch_target=0.005):
     was_enabled = gc.isenabled()
     gc.disable()
     try:
-        fn()  # warm up: discard first-call effects (imports, lazy init, cold caches)
-        start = perf_counter()
-        fn()
-        once = max(perf_counter() - start, 1e-9)
-        batch = max(1, int(batch_target / once))
-        raw = []
-        for _ in range(samples):
-            start = perf_counter()
-            for _ in range(batch):
-                fn()
-            raw.append((perf_counter() - start) / batch)
+        batch = calibrate(fn, batch_target)
+        raw = [batch_time(fn, batch) for _ in range(samples)]
     finally:
         if was_enabled:
             gc.enable()

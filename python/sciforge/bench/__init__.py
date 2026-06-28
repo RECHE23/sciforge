@@ -7,7 +7,8 @@ include/ dirs). The bencher emits raw samples (:func:`collect` → :class:`Case`
 reporter derives every statistic from them.
 """
 
-from .runner import collect, fmt
+from .compare import Verdict, collect_pair, compare, verdict
+from .runner import batch_time, calibrate, collect, fmt
 from .schema import Case, Run, load_run, run_from_json, run_to_json, write_run
 from .stats import (
     ascii_boxplot,
@@ -20,6 +21,12 @@ from .stats import (
 
 __all__ = [
     "collect",
+    "collect_pair",
+    "compare",
+    "verdict",
+    "Verdict",
+    "calibrate",
+    "batch_time",
     "fmt",
     "Case",
     "Run",
