@@ -54,6 +54,34 @@ class MedianIqrTest(unittest.TestCase):
     def test_single_sample(self):
         self.assertEqual(median_iqr([7.0]), (7.0, 7.0, 7.0, 0.0, 7.0))
 
+    def test_median_iqr_known_sequence(self):
+        # [1..8]: median (4+5)/2 = 4.5; lower half [1,2,3,4] -> q1 = (2+3)/2 = 2.5; upper [5,6,7,8] ->
+        # q3 = (6+7)/2 = 6.5; IQR = 4.0; min = 1. Recomputed by hand, an oracle for the quartile rule.
+        self.assertEqual(median_iqr(list(range(1, 9))), (4.5, 2.5, 6.5, 4.0, 1))
+
+    def test_two_sample_boundary(self):
+        # N=2 [3,9]: median = 6; the single-element halves give q1 = 3, q3 = 9, IQR = 6.
+        self.assertEqual(median_iqr([3, 9]), (6.0, 3, 9, 6, 3))
+
+    def test_geomean_of_a_known_ratio(self):
+        # Every paired ratio is 2.0, so the geometric mean is exactly 2.0 and the CI brackets it.
+        point, low, high = geomean_ci([2.0, 2.0, 2.0, 2.0])
+        self.assertAlmostEqual(point, 2.0)
+        self.assertLessEqual(low, 2.0)
+        self.assertGreaterEqual(high, 2.0)
+
+    def test_bootstrap_is_deterministic_by_seed(self):
+        # A fixed rng makes the resampling reproducible — two runs with the same seed agree exactly.
+        import random
+        import statistics
+        samples = [1.0, 2.0, 4.0, 8.0, 16.0]
+        first = bootstrap_ci(samples, statistics.mean, rng=random.Random(20260703))
+        second = bootstrap_ci(samples, statistics.mean, rng=random.Random(20260703))
+        self.assertEqual(first, second)
+        # a different seed generally gives a different interval (a weak check that the seed is used)
+        other = bootstrap_ci(samples, statistics.mean, rng=random.Random(1))
+        self.assertNotEqual(first, other)
+
 
 class BoxplotTest(unittest.TestCase):
     def test_two_series_render_two_rows_plus_an_axis(self):

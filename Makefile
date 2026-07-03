@@ -20,7 +20,7 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest corpus-selftest bench-cpp-selftest clean release help
+.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest clean release help
 
 PYTHON ?= python3
 
@@ -97,6 +97,16 @@ bench-selftest:
 # Same sibling-layout convention as bench-selftest.
 corpus-selftest:
 	PYTHONPATH=python $(PYTHON) -m unittest discover -s python/sciforge/corpus/tests -p 'test_*.py'
+
+# Meta-test the C++ test framework itself (include/sciforge/test/framework.hpp): the classic blind spot
+# is a harness whose FAILED assertions are untested. A standalone child (tests/framework_selftest.cpp)
+# runs one scenario per invocation; the driver asserts, per scenario, the exit code and the exact printed
+# check counts — EXPECT(false) counted, EXPECT_THROWS failing when nothing throws, the success path
+# clean. The framework that judges every other test earns its own oracle.
+framework-selftest:
+	@mkdir -p $(BUILD)
+	@$(CXX) -std=c++20 -O2 -Iinclude tests/framework_selftest.cpp -o $(BUILD)/framework_selftest
+	@$(PYTHON) tests/framework_selftest_driver.py $(BUILD)/framework_selftest
 
 # Selftest the C++ raw collector (include/sciforge/bench.hpp). Compiles tests/bench_emit.cpp
 # under clang AND g++ (closing the clang/g++ gap on the templates, like binding-selftest-gpp),
