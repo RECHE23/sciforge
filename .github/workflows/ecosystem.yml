@@ -1,0 +1,65 @@
+# Heads-together integration: build the three repos at their current main, together, and run each one's
+# FAST tests (not the full per-repo gates — that authority stays with each repo's own CI). This catches
+# an integration break between real@main, scilex@main and sciforge@main early, without duplicating the
+# gates. Non-blocking by design: nightly + manual, never a required PR check (it graduates to blocking
+# only once the signal has stayed clean). The three commit SHAs are logged first so a red run is
+# bisectable.
+name: ecosystem
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # nightly, 07:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ecosystem
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  heads-together:
+    runs-on: ubuntu-latest
+    steps:
+      # The three repos as siblings under the workspace, so each repo's default sibling include paths
+      # (../sciforge, ../real-regex) resolve with no overrides — the same layout maintainers use locally.
+      - name: Check out sciforge
+        uses: actions/checkout@v4
+        with:
+          path: sciforge
+      - name: Check out real-regex
+        uses: actions/checkout@v4
+        with:
+          repository: RECHE23/real-regex
+          path: real-regex
+      - name: Check out scilex
+        uses: actions/checkout@v4
+        with:
+          repository: RECHE23/scilex
+          path: scilex
+
+      - name: The three heads (SHAs — for bisecting a red run)
+        run: |
+          echo "sciforge   $(git -C sciforge   rev-parse HEAD)"
+          echo "real-regex $(git -C real-regex rev-parse HEAD)"
+          echo "scilex     $(git -C scilex     rev-parse HEAD)"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install cmake + clang
+        run: sudo apt-get update && sudo apt-get install -y cmake clang
+
+      # real@main: its own headers against sciforge@main's test framework.
+      - name: real-regex — build + fast tests
+        run: make -C real-regex test
+      - name: real-regex — Python binding
+        run: make -C real-regex python-test
+
+      # scilex@main: built against real@main's headers and sciforge@main's framework — the integration
+      # surface. The sibling defaults (REAL_INCLUDE=../real-regex/include, SciForge at ../sciforge) apply.
+      - name: scilex — build + fast tests (against real@main + sciforge@main)
+        run: make -C scilex test
+      - name: scilex — Python binding (against real@main)
+        run: make -C scilex python-test
