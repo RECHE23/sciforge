@@ -16,7 +16,13 @@ from sciforge.corpus import (
     Case,
     Manifest,
 )
-from sciforge.corpus.runner import load_cases_dat, load_cases_toml, re_like_engine, run_corpus
+from sciforge.corpus.runner import (
+    load_cases_dat,
+    load_cases_rust_toml,
+    load_cases_toml,
+    re_like_engine,
+    run_corpus,
+)
 
 
 def _stub(table):
@@ -115,6 +121,33 @@ class TestLoaders(unittest.TestCase):
             self.assertEqual(len(cases), 2)
             self.assertEqual(cases[0].expected["span"], [0, 3])
             self.assertIsNone(cases[1].expected)
+        finally:
+            os.unlink(path)
+
+    def test_rust_toml_adapter(self):
+        # The rust-regex shape: [[test]] with regex/haystack/matches (a list of matches, each a group-0
+        # span or a list of group spans). anchored / bounds / non-utf8 tests are filtered and counted.
+        doc = "\n".join([
+            '[[test]]', 'name = "a"', "regex = 'a(b)'", 'haystack = "ab"',
+            'matches = [[[0, 2], [1, 2]]]', 'unicode = false',
+            '',
+            '[[test]]', 'name = "b"', "regex = 'a'", 'haystack = "aa"',
+            'matches = [[0, 1], [1, 2]]',
+            '',
+            '[[test]]', 'name = "skip"', "regex = 'a'", 'haystack = "a"',
+            'matches = [[0, 1]]', 'anchored = true',   # out-of-API -> filtered
+        ])
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as handle:
+            handle.write(doc)
+            path = handle.name
+        try:
+            cases, filtered = load_cases_rust_toml(path)
+            self.assertEqual(filtered, 1)               # the anchored test is filtered
+            self.assertEqual(len(cases), 2)
+            self.assertEqual(cases[0].flags, ["ascii"])  # unicode=false -> ascii
+            self.assertEqual(cases[0].expected, [{"span": [0, 2], "groups": [[1, 2]]}])
+            self.assertEqual(cases[1].expected,
+                             [{"span": [0, 1], "groups": []}, {"span": [1, 2], "groups": []}])
         finally:
             os.unlink(path)
 

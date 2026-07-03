@@ -122,6 +122,43 @@ def load_cases_toml(path):
     return manifest, cases
 
 
+def _rust_match(match):
+    """Normalise a rust-regex match entry — ``[s, e]`` (group 0) or ``[[s0,e0], [s1,e1], …]``."""
+    if match and isinstance(match[0], int):
+        return {"span": list(match), "groups": []}
+    span = list(match[0]) if match[0] is not None else [-1, -1]
+    groups = [([-1, -1] if g is None else list(g)) for g in match[1:]]
+    return {"span": span, "groups": groups}
+
+
+def load_cases_rust_toml(path):
+    """Adapter for a rust-regex ``testdata`` ``.toml`` file (``finditer`` semantics — the ``matches``
+    field is every non-overlapping match).
+
+    Returns ``(cases, filtered)``: `filtered` counts the ``[[test]]`` entries skipped as **out of the
+    API we offer** (``anchored`` / ``bounds`` / ``match-limit`` / non-UTF-8), which is import-time
+    filtering, distinct from any runtime status. ``unicode = false`` maps to the ``ascii`` flag and
+    ``case-insensitive`` to ``icase``.
+    """
+    with open(path, "rb") as handle:
+        doc = tomllib.load(handle)
+    cases, filtered = [], 0
+    for entry in doc.get("test", []):
+        if (entry.get("anchored") or "bounds" in entry or "match-limit" in entry
+                or entry.get("utf8") is False or not isinstance(entry.get("haystack"), str)):
+            filtered += 1
+            continue
+        flags = []
+        if entry.get("unicode") is False:
+            flags.append("ascii")
+        if entry.get("case-insensitive"):
+            flags.append("icase")
+        expected = [_rust_match(match) for match in entry.get("matches", [])]
+        cases.append(Case(pattern=entry["regex"], input=entry["haystack"],
+                          expected=expected, flags=flags))
+    return cases, filtered
+
+
 def load_cases_dat(path, manifest, *, encoding="latin-1"):
     """Adapter for a Fowler / Go ``testregex`` ``.dat`` corpus into :class:`Case` records.
 
