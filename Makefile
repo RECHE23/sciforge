@@ -20,7 +20,7 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest bench-cpp-selftest clean release help
+.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest corpus-selftest bench-cpp-selftest clean release help
 
 PYTHON ?= python3
 
@@ -37,6 +37,7 @@ help:
 	@echo "  make lint-config   Self-test the shared MISRA base (lint/clang-tidy-misra)"
 	@echo "  make binding-selftest-gpp  Build+run the binding fixture under g++ (clang/g++ divergence gate)"
 	@echo "  make bench-selftest  Run the sciforge.bench substrate selftests (stats + schema)"
+	@echo "  make corpus-selftest Run the sciforge.corpus substrate selftests (schema + classify)"
 	@echo "  make bench-cpp-selftest  Build the C++ collector selftest (clang+g++) + Python round-trip"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
@@ -90,6 +91,12 @@ binding-selftest-gpp:
 # to the in-tree package (the same sibling layout consumers use via ../sciforge/python).
 bench-selftest:
 	PYTHONPATH=python $(PYTHON) -m unittest discover -s python/sciforge/bench/tests -p 'test_*.py'
+
+# Selftest the dev-only conformance-corpus substrate (python/sciforge/corpus): the case contract's
+# machine schema and its classification rules, including the adversarial ten-trap acceptance test.
+# Same sibling-layout convention as bench-selftest.
+corpus-selftest:
+	PYTHONPATH=python $(PYTHON) -m unittest discover -s python/sciforge/corpus/tests -p 'test_*.py'
 
 # Selftest the C++ raw collector (include/sciforge/bench.hpp). Compiles tests/bench_emit.cpp
 # under clang AND g++ (closing the clang/g++ gap on the templates, like binding-selftest-gpp),
