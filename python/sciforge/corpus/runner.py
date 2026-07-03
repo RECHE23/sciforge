@@ -40,8 +40,8 @@ def re_like_engine(module):
             flag_value |= getattr(module, name.upper(), 0)
         try:
             compiled = module.compile(pattern, flag_value)
-        except module.error:
-            return "error"
+        except (module.error, OverflowError, RecursionError, MemoryError):
+            return "error"  # the pattern is rejected (a syntax error, or a resource limit like a huge {n})
         if api == "finditer":
             return [_match_observable(m) for m in compiled.finditer(text)]
         matcher = getattr(compiled, api)  # search / fullmatch / match
@@ -144,8 +144,15 @@ def load_cases_rust_toml(path):
         doc = tomllib.load(handle)
     cases, filtered = [], 0
     for entry in doc.get("test", []):
+        # Out of the API we offer, or a rust-specific knob: an anchored / sub-region / match-limited /
+        # non-UTF-8 search, an overlapping or non-leftmost-first match-kind, a rust escape-decode, a
+        # compile-only test, or a custom line terminator. Filtered at import and counted.
         if (entry.get("anchored") or "bounds" in entry or "match-limit" in entry
-                or entry.get("utf8") is False or not isinstance(entry.get("haystack"), str)):
+                or entry.get("utf8") is False or entry.get("unescape")
+                or "search-kind" in entry or "line-terminator" in entry
+                or entry.get("compiles") is False
+                or entry.get("match-kind") not in (None, "leftmost-first")
+                or not isinstance(entry.get("haystack"), str)):
             filtered += 1
             continue
         flags = []
