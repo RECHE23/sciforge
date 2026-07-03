@@ -6,7 +6,8 @@
  * chained operator+, and \ref test::bytes builds a std::string from raw byte
  * values (for crafting UTF-8 and malformed-input fixtures).
  */
-#pragma once
+#ifndef SCIFORGE_TEST_STRINGS_HPP
+#define SCIFORGE_TEST_STRINGS_HPP
 
 #include <initializer_list>
 #include <string>
@@ -51,3 +52,5 @@ namespace test {
     return result;
   }
 } // namespace test
+
+#endif // SCIFORGE_TEST_STRINGS_HPP

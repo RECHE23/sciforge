@@ -10,7 +10,8 @@
 // (bytes-only), std::vector<T> (return side), and PyObject* (pass-through). A
 // binding adds its own capsule handles by specializing caster<HandleT> (see the
 // pattern note at the bottom). Uses only Py_LIMITED_API functions.
-#pragma once
+#ifndef SCIFORGE_BINDING_CONVERT_HPP
+#define SCIFORGE_BINDING_CONVERT_HPP
 
 #include <Python.h>
 
@@ -303,3 +304,5 @@ namespace sciforge::binding {
   //
   // This is documented, not shipped — the substrate carries no binding-specific types.
 }  // namespace sciforge::binding
+
+#endif // SCIFORGE_BINDING_CONVERT_HPP

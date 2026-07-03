@@ -5,7 +5,8 @@
  * runner. Failures are reported but never abort the run, so one failing test
  * does not hide others.
  */
-#pragma once
+#ifndef SCIFORGE_TEST_FRAMEWORK_HPP
+#define SCIFORGE_TEST_FRAMEWORK_HPP
 
 #include <cstdio>
 #include <exception>
@@ -209,3 +210,5 @@ namespace test {
           }                                                                                         \
           ::test::detail::check(caught_, __FILE__, __LINE__, "throws " #exception_type ": " #expr); \
         } while (0)
+
+#endif // SCIFORGE_TEST_FRAMEWORK_HPP

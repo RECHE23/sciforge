@@ -9,7 +9,8 @@
 // The module's error type is supplied by a consumer getter baked in as a non-type
 // template parameter (Getter), so the substrate holds no global and no module state.
 // Uses only Py_LIMITED_API functions.
-#pragma once
+#ifndef SCIFORGE_BINDING_DISPATCH_HPP
+#define SCIFORGE_BINDING_DISPATCH_HPP
 
 #include <Python.h>
 
@@ -270,3 +271,5 @@ namespace sciforge::binding {
                         METH_VARARGS | METH_KEYWORDS, doc};
   }
 }  // namespace sciforge::binding
+
+#endif // SCIFORGE_BINDING_DISPATCH_HPP

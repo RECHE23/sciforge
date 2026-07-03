@@ -7,7 +7,8 @@
 // Uses only Py_LIMITED_API functions (PyErr_NoMemory / PyErr_SetString /
 // PyErr_NewException / PyModule_AddObjectRef), so it compiles into one abi3 wheel
 // per platform (cp310+). The consumer defines Py_LIMITED_API before including this.
-#pragma once
+#ifndef SCIFORGE_BINDING_ERROR_HPP
+#define SCIFORGE_BINDING_ERROR_HPP
 
 #include <Python.h>
 
@@ -61,3 +62,5 @@ namespace sciforge::binding {
     return err;
   }
 }  // namespace sciforge::binding
+
+#endif // SCIFORGE_BINDING_ERROR_HPP

@@ -6,7 +6,8 @@
 // afterwards). That restore-on-throw guarantee is the load-bearing reason this is
 // RAII. The substrate owns the mechanism; the release *policy* (the threshold value)
 // stays with the consumer, which measures it per workload.
-#pragma once
+#ifndef SCIFORGE_BINDING_GIL_HPP
+#define SCIFORGE_BINDING_GIL_HPP
 
 #include <Python.h>
 
@@ -49,3 +50,5 @@ namespace sciforge::binding {
     {}
   };
 }  // namespace sciforge::binding
+
+#endif // SCIFORGE_BINDING_GIL_HPP

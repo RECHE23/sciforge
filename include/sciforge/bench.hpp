@@ -16,7 +16,8 @@
  * (the benches are out of gate, and CI builds with clang/gcc). It is a deliberate, best-effort
  * fallback for that toolchain; the GCC/Clang inline-asm barrier is the one the suite proves.
  */
-#pragma once
+#ifndef SCIFORGE_BENCH_HPP
+#define SCIFORGE_BENCH_HPP
 
 #include <algorithm>
 #include <atomic>
@@ -245,3 +246,5 @@ namespace sciforge::bench {
     return json_object(fields);
   }
 } // namespace sciforge::bench
+
+#endif // SCIFORGE_BENCH_HPP

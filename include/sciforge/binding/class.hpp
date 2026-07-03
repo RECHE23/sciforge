@@ -17,7 +17,8 @@
 //
 // caster<T> (from SCIFORGE_WRAPPED(T)) bridges T <-> the heap type: from_python unwraps a
 // borrowed reference, to_python wraps a copy. So a module function can take or return a T.
-#pragma once
+#ifndef SCIFORGE_BINDING_CLASS_HPP
+#define SCIFORGE_BINDING_CLASS_HPP
 
 #include <Python.h>
 
@@ -450,3 +451,5 @@ namespace sciforge::binding {
             }                                                                       \
           };                                                                        \
         }
+
+#endif // SCIFORGE_BINDING_CLASS_HPP

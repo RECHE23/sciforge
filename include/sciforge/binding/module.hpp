@@ -8,7 +8,8 @@
 // builder. SCIFORGE_BINDING_ERROR_GETTER; forward-declares the getter so manual
 // functions earlier in the file can call sciforge_module_error() too. One module per
 // translation unit.
-#pragma once
+#ifndef SCIFORGE_BINDING_MODULE_HPP
+#define SCIFORGE_BINDING_MODULE_HPP
 
 #include <Python.h>
 
@@ -117,3 +118,5 @@ namespace sciforge::binding {
           return module;                                                                          \
         }                                                                                           \
         void sciforge_module_register(::sciforge::binding::module_builder<&sciforge_module_error>& m)
+
+#endif // SCIFORGE_BINDING_MODULE_HPP
