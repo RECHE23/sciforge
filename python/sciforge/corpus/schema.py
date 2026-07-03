@@ -162,6 +162,45 @@ def classify(real_result,
     return BUG
 
 
+def is_empty_iteration_capture(real_result, oracle_result):
+    """True when real and the oracle agree on every match **span** but differ only by the empty-final-
+    iteration capture rule: at each differing group the oracle's capture is a **zero-width** span (the
+    empty iteration it took and real did not). This is the signature of the documented nullable-loop
+    divergence; a consumer maps it to that section's link. A difference in any match span (a real
+    selection difference) is *not* this class and returns False.
+    """
+    def one(real_match, oracle_match):
+        if not isinstance(real_match, dict) or not isinstance(oracle_match, dict):
+            return False  # None / "error": only this class when both are matches
+        if real_match["span"] != oracle_match["span"]:
+            return False  # a match-span difference is a genuine selection difference, not this class
+        real_groups, oracle_groups = real_match["groups"], oracle_match["groups"]
+        if len(real_groups) != len(oracle_groups):
+            return False
+        differ = False
+        for real_span, oracle_span in zip(real_groups, oracle_groups):
+            if real_span != oracle_span:
+                differ = True
+                if oracle_span[0] != oracle_span[1]:  # the oracle's differing group must be zero-width
+                    return False
+        return differ
+
+    if isinstance(real_result, list) or isinstance(oracle_result, list):
+        if not (isinstance(real_result, list) and isinstance(oracle_result, list)):
+            return False
+        if len(real_result) != len(oracle_result):
+            return False
+        differ = False
+        for real_match, oracle_match in zip(real_result, oracle_result):
+            if real_match == oracle_match:
+                continue
+            if not one(real_match, oracle_match):
+                return False
+            differ = True
+        return differ
+    return one(real_result, oracle_result)
+
+
 @dataclass
 class CaseResult:
     """The outcome of running one case: its status plus the values that produced it (for the report)."""

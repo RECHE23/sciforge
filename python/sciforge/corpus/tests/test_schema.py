@@ -20,6 +20,7 @@ from sciforge.corpus import (
     Manifest,
     SchemaError,
     classify,
+    is_empty_iteration_capture,
     report_from_json,
     report_to_json,
 )
@@ -103,6 +104,34 @@ class TestTrapCases(unittest.TestCase):
         self.assertEqual(
             classify(real_result="x", oracle_result="x", corpus_expected="x",
                      semantics="leftmost-first", oracle="real_only"), PASS)
+
+
+class TestEmptyIterationSignature(unittest.TestCase):
+    def test_recognises_the_class(self):
+        # (a*)* on "a": same match span, group 1 differs, oracle's group is the zero-width empty step.
+        real = {"span": [0, 1], "groups": [[0, 1]]}
+        oracle = {"span": [0, 1], "groups": [[1, 1]]}
+        self.assertTrue(is_empty_iteration_capture(real, oracle))
+        # ()* on "": oracle captures the empty (0,0), real leaves it unset.
+        self.assertTrue(is_empty_iteration_capture({"span": [0, 0], "groups": [[-1, -1]]},
+                                                   {"span": [0, 0], "groups": [[0, 0]]}))
+
+    def test_rejects_a_span_difference(self):
+        # A different match span is a genuine selection difference (an a|ab-class bug), never this class.
+        self.assertFalse(is_empty_iteration_capture({"span": [0, 1], "groups": []},
+                                                    {"span": [0, 2], "groups": []}))
+
+    def test_rejects_a_non_empty_group_difference(self):
+        # If the oracle's differing group is NOT zero-width, it is some other divergence, not this one.
+        self.assertFalse(is_empty_iteration_capture({"span": [0, 3], "groups": [[0, 1]]},
+                                                    {"span": [0, 3], "groups": [[0, 2]]}))
+
+    def test_finditer_sequence(self):
+        real = [{"span": [1, 1], "groups": [[-1, -1]]}]
+        oracle = [{"span": [1, 1], "groups": [[1, 1]]}]
+        self.assertTrue(is_empty_iteration_capture(real, oracle))
+        # a length mismatch (different number of matches) is not this class
+        self.assertFalse(is_empty_iteration_capture(real, oracle + oracle))
 
 
 class TestValidation(unittest.TestCase):

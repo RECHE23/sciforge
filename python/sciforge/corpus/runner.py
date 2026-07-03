@@ -59,7 +59,7 @@ def _divergence_link(case):
     return None
 
 
-def run_corpus(cases, manifest, *, engine, oracle):
+def run_corpus(cases, manifest, *, engine, oracle, divergence_of=None):
     """Run every case and return a :class:`CorpusReport`.
 
     Args:
@@ -68,6 +68,10 @@ def run_corpus(cases, manifest, *, engine, oracle):
         engine: the driver under test — ``(pattern, input, api, flags) -> observable``.
         oracle: the authority driver, same shape. Ignored when ``manifest.oracle == "real_only"``
             (the stored ``expected`` is then the authority).
+        divergence_of: an optional ``(real_result, oracle_result, case) -> link | None`` callback that
+            recognises a *documented* divergence class and returns its divergences.dox link, so those
+            cases classify as ``intentional_divergence`` instead of ``bug``. A per-case ``status_expected``
+            override takes precedence over it.
 
     Returns:
         CorpusReport
@@ -79,9 +83,12 @@ def run_corpus(cases, manifest, *, engine, oracle):
             oracle_result = case.expected
         else:
             oracle_result = oracle(case.pattern, case.input, manifest.api, case.flags)
+        link = _divergence_link(case)
+        if link is None and divergence_of is not None:
+            link = divergence_of(real_result, oracle_result, case)
         status = classify(real_result, oracle_result, case.expected,
                           semantics=manifest.semantics, oracle=manifest.oracle,
-                          requires=case.requires, divergence_link=_divergence_link(case))
+                          requires=case.requires, divergence_link=link)
         results.append(CaseResult(status=status, pattern=case.pattern,
                                   real_result=real_result, oracle_result=oracle_result))
     return CorpusReport(corpus=manifest.origin, manifest=manifest, results=results)
