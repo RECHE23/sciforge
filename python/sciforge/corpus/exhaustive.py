@@ -24,7 +24,7 @@ _MAX_BRANCHES = 3  #: cap on alternation branches (keeps the space finite and PR
 _MAX_SEQ = 4       #: cap on concatenated elements per sequence.
 
 
-def _atoms(budget, alphabet):
+def _atoms(budget, alphabet, empty_branches=False):
     """Yield (string, size) for atoms within `budget`: the leaf atoms and parenthesised groups."""
     if budget < 1:
         return
@@ -32,48 +32,59 @@ def _atoms(budget, alphabet):
         yield atom, 1
     # a group ( alternation ) costs one construct for the parens plus its inner size
     if budget >= 2:
-        for inner, size in _alts(budget - 1, alphabet):
+        for inner, size in _alts(budget - 1, alphabet, empty_branches=empty_branches):
             yield "(" + inner + ")", size + 1
 
 
-def _elements(budget, alphabet):
+def _elements(budget, alphabet, empty_branches=False):
     """Yield (string, size) for one sequence element: an anchor, an atom, or a quantified atom."""
     if budget < 1:
         return
     for anchor in _ANCHORS:
         yield anchor, 1
-    for atom, size in _atoms(budget, alphabet):
+    for atom, size in _atoms(budget, alphabet, empty_branches):
         yield atom, size
         if size + 1 <= budget:
             for quant in _QUANTS:
                 yield atom + quant, size + 1
 
 
-def _seqs(budget, alphabet, depth=_MAX_SEQ):
+def _seqs(budget, alphabet, depth=_MAX_SEQ, empty_branches=False):
     """Yield (string, size) for sequences (>= 1 concatenated elements) within `budget`."""
-    for element, size in _elements(budget, alphabet):
+    for element, size in _elements(budget, alphabet, empty_branches):
         yield element, size
         if depth > 1:
-            for rest, rest_size in _seqs(budget - size, alphabet, depth - 1):
+            for rest, rest_size in _seqs(budget - size, alphabet, depth - 1, empty_branches):
                 yield element + rest, size + rest_size
 
 
-def _alts(budget, alphabet, branches=_MAX_BRANCHES):
-    """Yield (string, size) for alternations (1..branches sequences joined by ``|``) within `budget`."""
-    for sequence, size in _seqs(budget, alphabet):
+def _alts(budget, alphabet, branches=_MAX_BRANCHES, empty_branches=False):
+    """Yield (string, size) for alternations (1..branches sequences joined by ``|``) within `budget`.
+
+    With ``empty_branches`` (tier 2) a branch may be the empty string, so ``|a`` / ``a|`` / ``|a|b`` are
+    generated — the nullable-alternation class the tier-1 grammar could not reach (an empty branch under
+    a quantifier is exactly where the greedy-loop empty-preference bugs live).
+    """
+    for sequence, size in _seqs(budget, alphabet, empty_branches=empty_branches):
         yield sequence, size
         if branches > 1 and size + 1 <= budget:
-            for rest, rest_size in _alts(budget - size - 1, alphabet, branches - 1):
+            for rest, rest_size in _alts(budget - size - 1, alphabet, branches - 1, empty_branches):
                 yield sequence + "|" + rest, size + 1 + rest_size
+            if empty_branches:
+                yield sequence + "|", size + 1   # empty LAST branch: `a|`
+    if empty_branches and branches > 1 and budget >= 1:
+        for rest, rest_size in _alts(budget - 1, alphabet, branches - 1, empty_branches):
+            yield "|" + rest, 1 + rest_size      # empty FIRST branch: `|a`
 
 
-def enumerate_patterns(k, alphabet="ab"):
-    """Return the sorted, de-duplicated list of all tier-1 patterns of at most `k` constructs.
+def enumerate_patterns(k, alphabet="ab", tier=1):
+    """Return the sorted, de-duplicated list of all patterns of at most `k` constructs.
 
-    Sorted so two runs are byte-identical (determinism is a contract of this mode).
+    Sorted so two runs are byte-identical (determinism is a contract of this mode). ``tier=2`` adds
+    empty alternation branches to the grammar (the nullable-alternation class).
     """
     seen = set()
-    for pattern, _size in _alts(k, alphabet):
+    for pattern, _size in _alts(k, alphabet, empty_branches=(tier >= 2)):
         seen.add(pattern)
     return sorted(seen)
 

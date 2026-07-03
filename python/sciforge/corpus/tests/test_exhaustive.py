@@ -43,6 +43,20 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(len(enumerate_patterns(2)), 78)
         self.assertEqual(len(enumerate_patterns(3)), 870)
 
+    def test_tier2_adds_the_nullable_alternation_class(self):
+        # Tier 2 reaches the class tier 1 could not: an empty alternation branch. A quantified empty-
+        # first-branch group like (|a)* is exactly where the greedy-loop empty-preference bugs live, and
+        # tier 1 (whose branches are always >= 1 element) never generated it.
+        t1 = set(enumerate_patterns(4, tier=1))
+        t2 = set(enumerate_patterns(4, tier=2))
+        self.assertTrue(t1 < t2)  # strict superset
+        for pattern in ["(|a)*", "(|a)+", "(a|)*", "|a"]:
+            with self.subTest(pattern=pattern):
+                self.assertIn(pattern, t2)
+                self.assertNotIn(pattern, t1)  # precisely the class tier 1 missed
+        # still deterministic
+        self.assertEqual(enumerate_patterns(3, tier=2), enumerate_patterns(3, tier=2))
+
     def test_cases_are_the_full_cross_product(self):
         npat = len(enumerate_patterns(2))
         ninp = len(enumerate_inputs(3))
