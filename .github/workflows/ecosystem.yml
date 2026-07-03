@@ -48,8 +48,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      - name: Install cmake + clang
-        run: sudo apt-get update && sudo apt-get install -y cmake clang
+      - name: Install cmake + clang + setuptools (the latter not bundled on Python 3.12+)
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake clang
+          python -m pip install --upgrade pip setuptools
 
       # real@main: its own headers against sciforge@main's test framework.
       - name: real-regex — build + fast tests
