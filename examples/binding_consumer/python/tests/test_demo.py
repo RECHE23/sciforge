@@ -203,6 +203,28 @@ class WidgetTest(unittest.TestCase):
     def test_def_repr(self):                        # def_repr wires tp_repr
         self.assertEqual(repr(bindingdemo.make_widget(3, 4)), "Widget(3, 4)")
 
+    def test_def_richcompare_equality(self):        # def_richcompare wires tp_richcompare (__eq__/__ne__)
+        a, b, c = bindingdemo.make_widget(3, 4), bindingdemo.make_widget(3, 4), bindingdemo.make_widget(5, 6)
+        self.assertTrue(a == a)                     # reflexive
+        self.assertTrue(a == b and b == a)          # symmetric, by value
+        self.assertTrue(a != c)
+        self.assertFalse(a == c)
+
+    def test_richcompare_foreign_type_is_notimplemented(self):
+        # A comparison against a non-Widget returns NotImplemented -> Python yields False (not TypeError).
+        w = bindingdemo.make_widget(3, 4)
+        self.assertFalse(w == 42)
+        self.assertFalse(w == "Widget(3, 4)")
+        self.assertTrue(w != object())
+        self.assertNotEqual(w, None)
+
+    def test_def_hash_consistency_and_containers(self):  # def_hash wires tp_hash; equal -> equal hash
+        a, b, c = bindingdemo.make_widget(3, 4), bindingdemo.make_widget(3, 4), bindingdemo.make_widget(5, 6)
+        self.assertEqual(hash(a), hash(b))          # a == b  =>  hash(a) == hash(b)
+        self.assertIn(a, {b})                       # usable as a set/dict key by value
+        self.assertEqual(len({a, b, c}), 2)         # a and b collapse; c is distinct
+        self.assertEqual({a: "x"}[b], "x")          # dict lookup by an equal-but-distinct instance
+
     def test_module_fn_unwraps_arg(self):           # unwrap (from_python) on an arg
         self.assertEqual(bindingdemo.widget_perimeter(bindingdemo.make_widget(3, 4)), 14)
 

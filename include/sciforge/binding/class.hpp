@@ -214,6 +214,50 @@ namespace sciforge::binding {
     }
   }
 
+  // The generated tp_richcompare: only == and != are wired, via Eq(const T&, const T&) -> bool. A
+  // comparison other than == / !=, or against anything that is not an instance of this wrapped type,
+  // returns NotImplemented so Python falls back correctly (an uninitialised instance compares unequal).
+  // A dedicated slot: PyType_FromSpec does not wire tp_richcompare from a tp_methods __eq__.
+  template <class T, PyObject* (*Getter)(), auto Eq>
+  PyObject* class_richcompare(PyObject* self,
+                              PyObject* other,
+                              int       op)
+  {
+    if (op != Py_EQ && op != Py_NE) {
+      Py_RETURN_NOTIMPLEMENTED;
+    }
+    if (class_type<T>() == nullptr
+        || PyObject_TypeCheck(other, reinterpret_cast<PyTypeObject*>(class_type<T>())) == 0) {
+      Py_RETURN_NOTIMPLEMENTED;
+    }
+    try {
+      const bool equal  {Eq(class_unwrap<T>(self), class_unwrap<T>(other))};
+      const bool result {op == Py_EQ ? equal : !equal};
+      if (result) {
+        Py_RETURN_TRUE;
+      }
+      Py_RETURN_FALSE;
+    } catch (const cast_error&) {
+      Py_RETURN_NOTIMPLEMENTED; // an uninitialised operand is not comparable
+    } catch (...) {
+      return set_cpp_error(Getter());
+    }
+  }
+
+  // The generated tp_hash: Hash(const T&) -> std::size_t, mapped to Py_hash_t (never -1, which Python
+  // reserves as the error sentinel). A dedicated slot, like tp_repr / tp_richcompare.
+  template <class T, PyObject* (*Getter)(), auto Hash>
+  Py_hash_t class_hash(PyObject* self)
+  {
+    try {
+      const auto      value {static_cast<Py_hash_t>(Hash(class_unwrap<T>(self)))};
+      return value == -1 ? -2 : value;
+    } catch (...) {
+      set_cpp_error(Getter());
+      return -1;
+    }
+  }
+
   namespace detail {
     // Call Factory(arg_0, ..., arg_n) from the parsed objects — the factory's parameters
     // map one-to-one to the constructor arguments (no leading self, unlike a method).
@@ -336,6 +380,29 @@ namespace sciforge::binding {
       return *this;
     }
 
+    // Wire __eq__ / __ne__ (the tp_richcompare slot) to a free function Eq(const T&, const T&) -> bool.
+    template <auto Eq>
+    class_& def_richcompare()
+    {
+      if (class_type<T>() != nullptr) {
+        return *this;
+      }
+      richcompare_ = class_richcompare<T, Getter, Eq>;
+      return *this;
+    }
+
+    // Wire __hash__ (the tp_hash slot) to a free function Hash(const T&) -> std::size_t. Pair it with
+    // def_richcompare so equal values hash equal (Python's hashable contract).
+    template <auto Hash>
+    class_& def_hash()
+    {
+      if (class_type<T>() != nullptr) {
+        return *this;
+      }
+      hash_ = class_hash<T, Getter, Hash>;
+      return *this;
+    }
+
     class_& raw(const char* name,
                 PyCFunction func,
                 int         flags,
@@ -394,9 +461,9 @@ namespace sciforge::binding {
       }
       class_methods<T>().push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});
       class_getsets<T>().push_back(PyGetSetDef {nullptr, nullptr, nullptr, nullptr, nullptr});
-      // Up to seven slots: dealloc/methods/getset, optionally tp_repr, optionally
-      // tp_new+tp_init when constructible, then the terminator.
-      PyType_Slot  slots[7] = {};
+      // Up to nine slots: dealloc/methods/getset, optionally tp_repr / tp_richcompare / tp_hash,
+      // optionally tp_new+tp_init when constructible, then the terminator.
+      PyType_Slot  slots[9] = {};
       std::size_t  n        = 0;
       unsigned int flags    = Py_TPFLAGS_DEFAULT;
       slots[n++] = {Py_tp_dealloc, reinterpret_cast<void*>(class_dealloc<T>)};
@@ -404,6 +471,12 @@ namespace sciforge::binding {
       slots[n++] = {Py_tp_getset, static_cast<void*>(class_getsets<T>().data())};
       if (repr_ != nullptr) {
         slots[n++] = {Py_tp_repr, reinterpret_cast<void*>(repr_)};
+      }
+      if (richcompare_ != nullptr) {
+        slots[n++] = {Py_tp_richcompare, reinterpret_cast<void*>(richcompare_)};
+      }
+      if (hash_ != nullptr) {
+        slots[n++] = {Py_tp_hash, reinterpret_cast<void*>(hash_)};
       }
       if (init_ != nullptr) {
         slots[n++] = {Py_tp_new, reinterpret_cast<void*>(PyType_GenericNew)};
@@ -425,10 +498,12 @@ namespace sciforge::binding {
       }
     }
 
-    PyObject* module_   = nullptr;
-    initproc  init_     = nullptr;        // set by def_init; null = factory-only
-    reprfunc  repr_     = nullptr;        // set by def_repr; null = default repr
-    bool      finished_ = false;
+    PyObject*    module_      = nullptr;
+    initproc     init_        = nullptr; // set by def_init; null = factory-only
+    reprfunc     repr_        = nullptr; // set by def_repr; null = default repr
+    richcmpfunc  richcompare_ = nullptr; // set by def_richcompare; null = default identity compare
+    hashfunc     hash_        = nullptr; // set by def_hash; null = default identity hash
+    bool         finished_    = false;
   };
 }  // namespace sciforge::binding
 

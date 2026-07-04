@@ -239,6 +239,17 @@ namespace {
     return "Widget(" + std::to_string(g.w) + ", " + std::to_string(g.h) + ")";
   }
 
+  bool        widget_eq(const Widget& a,        // __eq__ / __ne__ via def_richcompare
+                        const Widget& b)
+  {
+    return a.w == b.w && a.h == b.h;
+  }
+
+  std::size_t widget_hash(const Widget& g)      // __hash__ via def_hash (equal widgets hash equal)
+  {
+    return (static_cast<std::size_t>(g.w) * 1000003U) ^ static_cast<std::size_t>(g.h);
+  }
+
   Widget      make_widget(long long w,          // module fn -> Widget (exercises wrap)
                           long long h)
   {
@@ -336,6 +347,8 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   // N3b — a C++ type wrapped as a heap type, plus module functions that take/return it.
   m.type<Widget>("bindingdemo.Widget")
   .def_repr<&widget_repr>()
+  .def_richcompare<&widget_eq>()
+  .def_hash<&widget_hash>()
   .def<&area>("area", "area() -> w*h")
   .def_prop_ro<&width>("width", "the width")
   .def_prop_ro<&widget_dims>("dims", "(w, h) as a tuple — a computed PyObject* property")
