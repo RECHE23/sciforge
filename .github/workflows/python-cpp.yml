@@ -88,7 +88,7 @@ jobs:
   python:
     needs: route
     strategy:
-      fail-fast: false
+      fail-fast: true  # cancel sibling matrix legs on first red (save CI minutes)
       matrix:
         leg: ${{ fromJSON(needs.route.outputs.py_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}

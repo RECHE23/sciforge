@@ -96,8 +96,9 @@ jobs:
           dir="consumer${sub:+/$sub}"
           make -C "$dir" format-check SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge/lint"
 
+  # After format: a red format-check must not burn a clang-tidy-18 install + MISRA run.
   misra:
-    needs: route
+    needs: [route, format]
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
     steps:
       # Bootstrap SciForge (lint/ + the shared composite); see the format job.

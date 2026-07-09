@@ -80,7 +80,7 @@ jobs:
   # a PyPI-clean leaf.
   binding-selftest:
     strategy:
-      fail-fast: false
+      fail-fast: true  # cancel sibling matrix legs on first red (save CI minutes)
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}

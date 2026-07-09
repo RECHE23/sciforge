@@ -47,7 +47,7 @@ jobs:
   wheels:
     needs: check-version
     strategy:
-      fail-fast: false
+      fail-fast: true  # cancel sibling matrix legs on first red (save CI minutes)
       matrix:
         os: ${{ fromJSON(inputs.wheel-os) }}
     runs-on: ${{ matrix.os }}

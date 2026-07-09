@@ -113,7 +113,7 @@ jobs:
   posix:
     needs: route
     strategy:
-      fail-fast: false
+      fail-fast: true  # cancel sibling matrix legs on first red (save CI minutes)
       matrix:
         leg: ${{ fromJSON(needs.route.outputs.posix_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}
@@ -158,7 +158,7 @@ jobs:
   cmake:
     needs: route
     strategy:
-      fail-fast: false
+      fail-fast: true  # cancel sibling matrix legs on first red (save CI minutes)
       matrix:
         leg: ${{ fromJSON(needs.route.outputs.cmake_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}
