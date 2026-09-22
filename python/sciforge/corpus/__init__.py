@@ -10,6 +10,7 @@ a run into exactly one of the five statuses.
 from .schema import (
     BUG,
     EXCLUDED_BY_DESIGN,
+    FLAG_NAMES,
     INTENTIONAL_DIVERGENCE,
     OUT_OF_CONTRACT,
     PASS,
@@ -34,6 +35,7 @@ __all__ = [
     "OUT_OF_CONTRACT",
     "EXCLUDED_BY_DESIGN",
     "STATUSES",
+    "FLAG_NAMES",
     "Manifest",
     "Case",
     "CaseResult",

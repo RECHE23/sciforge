@@ -32,12 +32,25 @@ def _match_observable(match):
             "groups": [list(match.span(index)) for index in range(1, ngroups + 1)]}
 
 
+#: Corpus flag name -> the attribute every re-like module exposes. The vocabulary itself is bounded
+#: by ``Case.validate`` (:data:`sciforge.corpus.schema.FLAG_NAMES`); this maps it. NO DEFAULT: an
+#: unmapped name raises (KeyError) and a missing attribute raises (AttributeError) -- never a silent
+#: 0. A flag that compiles to nothing makes engine and oracle wrong identically, which a
+#: real-vs-oracle comparison cannot see; that shipped once, on `icase`.
+_FLAG_ATTR = {"ascii": "ASCII", "dotall": "DOTALL", "icase": "IGNORECASE",
+              "multiline": "MULTILINE", "verbose": "VERBOSE"}
+
+
 def re_like_engine(module):
-    """Return a driver over a re-compatible module (``real`` or ``re``): (pattern, input, api, flags)."""
+    """Return a driver over a re-compatible module (``real`` or ``re``): (pattern, input, api, flags).
+
+    Flags are mapped through :data:`_FLAG_ATTR`; an unknown name or a missing module attribute
+    raises, loudly, instead of compiling as flag value 0.
+    """
     def run(pattern, text, api, flags):
         flag_value = 0
         for name in flags:
-            flag_value |= getattr(module, name.upper(), 0)
+            flag_value |= getattr(module, _FLAG_ATTR[name])
         try:
             compiled = module.compile(pattern, flag_value)
         except (module.error, OverflowError, RecursionError, MemoryError):

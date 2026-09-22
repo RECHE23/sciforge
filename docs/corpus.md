@@ -60,7 +60,9 @@ is `out_of_contract` only when the manifest `semantics` differs from the oracle'
   files come in with a thin reader. A Fowler/`glibc` `.dat` file is read through a **small adapter**, not
   a second native format.
 - **Fields:** `pattern`, `input`, `expected` (spans + groups for a matcher, a token list for a lexer, or
-  absent for a no-match), `flags` (engine flag names), an optional `requires` (an excluded capability),
+  absent for a no-match), `flags` (engine flag names from a **closed vocabulary** — `ascii`, `dotall`,
+  `icase`, `multiline`, `verbose`; an unknown name is a schema error, never a silent no-op), an optional
+  `requires` (an excluded capability),
   and an optional **`status_expected`** override — a `{status, reason, link}` object that pins a case to
   a status by hand, with a mandatory `reason` and, for an `intentional_divergence`, the `link`.
 

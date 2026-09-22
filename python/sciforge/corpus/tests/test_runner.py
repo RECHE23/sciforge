@@ -15,6 +15,7 @@ from sciforge.corpus import (
     PASS,
     Case,
     Manifest,
+    SchemaError,
 )
 from sciforge.corpus.runner import (
     load_cases_dat,
@@ -160,6 +161,34 @@ class TestLoaders(unittest.TestCase):
         self.assertEqual(report.counts()[PASS], 1)
         # the observable carries the group span too
         self.assertEqual(report.results[0].real_result["groups"], [[1, 2]])
+
+
+class TestFlagMapping(unittest.TestCase):
+    """The flag mapping must fail loudly, and the witness is the STORED authority.
+
+    The defect this guards: `getattr(module, name.upper(), 0)` compiled `icase` to 0 on every
+    module (none has ICASE), so engine and oracle ran case-SENSITIVELY, agreed, and passed --
+    while the corpus's stored expectation said otherwise and nothing consulted it.
+    """
+
+    def test_icase_reaches_the_engine(self):
+        # 'a' on "A" with icase must match [0,1] -- the corpus's stored answer. With the flag
+        # dropped, re answers None; asserting the STORED expectation, not engine agreement, is
+        # what catches the drop.
+        import re
+        driver = re_like_engine(re)
+        self.assertEqual(driver("a", "A", "search", ["icase"]), {"span": [0, 1], "groups": []})
+
+    def test_unknown_flag_is_a_schema_error(self):
+        with self.assertRaises(SchemaError):
+            Case(pattern="a", input="x", flags=["i"]).validate()  # short forms are not the vocabulary
+
+    def test_unmapped_flag_raises_at_run(self):
+        # Defence in depth: a driver called without validate() still cannot compile a flag to 0.
+        import re
+        driver = re_like_engine(re)
+        with self.assertRaises(KeyError):
+            driver("a", "A", "search", ["not-a-flag"])
 
 
 if __name__ == "__main__":

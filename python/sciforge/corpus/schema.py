@@ -46,6 +46,12 @@ ORACLE_SEMANTICS = {
 #: Capabilities excluded by the engine's linearity thesis; a case needing one is never "bug"/"failed".
 EXCLUDED_CAPABILITIES = ("backreference", "recursion", "callout", "subroutine")
 
+#: The engine-flag vocabulary a case may carry (mapped to module attributes by the runner). A name
+#: outside this set is a schema error: an unmapped flag must fail loudly, never compile as 0. A
+#: silently dropped flag makes engine and oracle wrong IDENTICALLY, and a real-vs-oracle comparison
+#: cannot see that — only the stored expectation could, and it is not consulted on every path.
+FLAG_NAMES = ("ascii", "dotall", "icase", "multiline", "verbose")
+
 
 class SchemaError(ValueError):
     """A manifest or case that violates the corpus contract."""
@@ -103,6 +109,9 @@ class Case:
 
     def validate(self):
         """Return self after checking `requires` and any `status_expected` override."""
+        for name in self.flags:
+            if name not in FLAG_NAMES:
+                raise SchemaError("case flag {!r} not in {}".format(name, FLAG_NAMES))
         if self.requires and self.requires not in EXCLUDED_CAPABILITIES:
             raise SchemaError("case requires {!r} not in {}".format(self.requires, EXCLUDED_CAPABILITIES))
         override = self.status_expected
