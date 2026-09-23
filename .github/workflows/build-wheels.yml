@@ -26,6 +26,8 @@ on:
       wheel-os:         { type: string, default: '["ubuntu-latest","ubuntu-24.04-arm","macos-latest","windows-latest"]' }
       cibw-archs-macos: { type: string, default: 'x86_64 arm64' }
       cibw-environment: { type: string, default: '' }
+      # A job invoked with `uses:` cannot carry timeout-minutes at the caller, so the ceiling lives here.
+      timeout-minutes:  { type: number, default: 45 }
 
 jobs:
   # Guard: on a version-tag push, the tag must match the pyproject version. On any
@@ -33,6 +35,7 @@ jobs:
   # and the job passes — the build still runs, proving the mechanism.
   check-version:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - name: Tag matches pyproject version
@@ -51,6 +54,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.wheel-os) }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@v6
       - name: Build wheels (cibuildwheel, abi3)
@@ -67,6 +71,7 @@ jobs:
   sdist:
     needs: check-version
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - name: Build sdist

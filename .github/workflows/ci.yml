@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['**']   # release tags are just tags; there is no separate release workflow
+    branches: ['**']   # a release tag runs release.yml (sciforge-build to PyPI), not this matrix
     paths-ignore: ['**.md']   # doc-only pushes do not need the matrix
   pull_request:
 
@@ -64,6 +64,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Self-test (smoke + WILL_FAIL meta)
         run: make test CXX=${{ matrix.cxx }}
+
+  # The self-tests of the tools consumers run: the harness's own failure oracle, the bench and corpus
+  # substrates, the C++ -> JSON bench round trip, the g++ binding consumer, and check-pins driving each
+  # pin form alone. Each existed only as a local target; a tool nobody runs in CI can rot green.
+  selftests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: check-pins (each form alone)
+        run: bash tools/check-pins.sh --self-test
+      - name: Harness failure oracle, bench/corpus substrates, bench round trip, g++ binding
+        run: make framework-selftest bench-selftest corpus-selftest bench-cpp-selftest binding-selftest-gpp PYTHON=python
 
   # Self-test on Windows / MSVC, driven straight through CMake (bash ships on the
   # Windows runner; --config/-C Release cover the multi-config MSVC generator).

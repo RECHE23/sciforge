@@ -47,6 +47,8 @@ on:
       enable-macos:        { type: boolean, default: false }
       enable-windows-msvc: { type: boolean, default: false }
       enable-arm:          { type: boolean, default: false }
+      # A job invoked with `uses:` cannot carry timeout-minutes at the caller, so the ceiling lives here.
+      timeout-minutes:     { type: number,  default: 60 }
     secrets:
       ci-pat:          { required: false }
 
@@ -62,6 +64,7 @@ jobs:
   # equivalents).
   route:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       linux:        ${{ steps.pick.outputs.linux }}
       self:         ${{ steps.pick.outputs.self }}
@@ -117,6 +120,7 @@ jobs:
       matrix:
         leg: ${{ fromJSON(needs.route.outputs.posix_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       # Bootstrap SciForge (lint/ + harness + the shared composite). A reusable
       # workflow can only reach a local action after its repo is checked out, so
@@ -162,6 +166,7 @@ jobs:
       matrix:
         leg: ${{ fromJSON(needs.route.outputs.cmake_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       # Bootstrap SciForge (lint/ + harness + the shared composite). A reusable
       # workflow can only reach a local action after its repo is checked out, so

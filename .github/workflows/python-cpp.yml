@@ -40,6 +40,8 @@ on:
       project-subdir:  { type: string,  default: '' }
       enable-macos:    { type: boolean, default: false }
       enable-windows:  { type: boolean, default: false }
+      # A job invoked with `uses:` cannot carry timeout-minutes at the caller, so the ceiling lives here.
+      timeout-minutes: { type: number,  default: 30 }
     secrets:
       ci-pat:          { required: false }
 
@@ -51,6 +53,7 @@ jobs:
   # Windows (self-hosted-windows when routed) legs are added per the enable-* toggles.
   route:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       self:      ${{ steps.pick.outputs.self }}
       py_matrix: ${{ steps.pick.outputs.py_matrix }}
@@ -92,6 +95,7 @@ jobs:
       matrix:
         leg: ${{ fromJSON(needs.route.outputs.py_matrix) }}
     runs-on: ${{ fromJSON(matrix.leg.runner) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       # Bootstrap SciForge (provides the composite) then check out consumer + deps.
       - uses: actions/checkout@v6

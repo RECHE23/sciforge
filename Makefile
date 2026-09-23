@@ -132,11 +132,13 @@ clean:
 	rm -rf $(BUILD)
 
 # Cut a calendar-versioned release: vYYYY.M.PATCH where PATCH is the count of tags
-# already cut this calendar month (so the first ever is v2026.6.0). SciForge is
-# header-only infrastructure — a release is a git tag + push, nothing more (no
-# version bump, no PyPI). Hard guards refuse anything unsafe; `DRY_RUN=1` computes
-# and prints the version without touching git or the remote (works before the
-# repo has an 'origin', i.e. during local bring-up).
+# already cut this calendar month (so the first ever is v2026.6.0). The tag is what
+# consumers pin, and pushing it also publishes sciforge-build to PyPI (release.yml),
+# whose check-version job refuses a tag that differs from
+# python/sciforge-build/pyproject.toml. That refusal comes AFTER the push, when the
+# tag is already public, so the same comparison runs here first: bump the version,
+# commit, then release. Hard guards refuse anything unsafe; `DRY_RUN=1` computes the
+# version and runs every guard without touching git or the remote.
 release:
 	@branch=$$(git symbolic-ref --short HEAD 2>/dev/null); \
 	  test "$$branch" = main || { echo "release: must be on main (on '$$branch')"; exit 1; }
@@ -150,6 +152,10 @@ release:
 	  version="v$$year.$$month.$$patch"; \
 	  if git rev-parse -q --verify "refs/tags/$$version" >/dev/null; then \
 	    echo "release: tag $$version already exists"; exit 1; fi; \
+	  proj=$$(grep -E '^version *=' python/sciforge-build/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	  if [ "v$$proj" != "$$version" ]; then \
+	    echo "release: next tag is $$version but python/sciforge-build/pyproject.toml says $$proj -- bump it to $${version#v} and commit first (release.yml refuses the mismatch only after the tag is public)"; \
+	    exit 1; fi; \
 	  if [ -n "$(DRY_RUN)" ]; then echo "[dry-run] would tag and push $$version"; exit 0; fi; \
 	  echo "Releasing $$version"; \
 	  git tag "$$version"; \

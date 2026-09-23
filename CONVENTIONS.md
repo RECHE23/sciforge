@@ -58,7 +58,10 @@ REAL and SciLex consume SciForge's reusable CI workflows (`lint-cpp.yml`, `build
 `python-cpp.yml`) and its headers. Both are pinned to the **same CalVer tag** across a repo's workflow
 file — the `uses: …@vX` workflow reference and the `sciforge-ref:` / `ref:` checkout — so a job never
 mixes SciForge versions. Direct `actions/checkout` steps (coverage, sanitize, docs jobs that run `make`
-themselves) take the same tag as the reusable-workflow jobs. Bump all of them together.
+themselves) take the same tag as the reusable-workflow jobs. Bump all of them together. The CMake fetch tag
+(`set(SCIFORGE_TAG "vX" …)` in `CMakeLists.txt` or a `cmake/` module) is the same pin in a fourth
+place and moves with them. `tools/check-pins.sh <repo>` reads all four and fails on more than one
+version; `--self-test` proves each form is read.
 
 ## Versioning and the `sciforge-build` floor
 

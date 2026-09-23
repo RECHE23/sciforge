@@ -4,8 +4,9 @@ Shared infrastructure for a scientific-computing ecosystem: the canonical C++
 test harness at
 `<sciforge/test/framework.hpp>` (the header-only CMake target `sciforge::test`)
 and the shared lint configuration in `lint/`. SciForge is header-only
-infrastructure — it is **not** a runtime dependency and is never published to
-PyPI.
+infrastructure and **never a runtime dependency**. Its one published artifact is
+`sciforge-build` on PyPI — the C++ binding-substrate headers a consumer renders at
+wheel-build time — released with each tag (`release.yml`).
 
 `make test` builds and runs the self-tests (a passing smoke test plus a
 `WILL_FAIL` meta test that proves the harness detects failures).
@@ -34,7 +35,7 @@ CalVer tag from the remote, no on-disk-layout assumption:
 include(FetchContent)
 FetchContent_Declare(sciforge
     GIT_REPOSITORY https://github.com/RECHE23/sciforge.git
-    GIT_TAG        v2026.6.0)
+    GIT_TAG        v2026.9.0)   # the latest tag; bump it with every workflow pin (tools/check-pins.sh)
 FetchContent_MakeAvailable(sciforge)
 target_link_libraries(my_tests PRIVATE sciforge::test)
 ```
@@ -75,10 +76,6 @@ reach the *same* headers:
 
   `sciforge-build` is **never a runtime dependency** — it only renders the headers at
   wheel-build time.
-
-> **`v2026.6.0` is the bootstrap milestone:** it proves the inclusion mechanism
-> end to end. The reusable content is still deliberately minimal; it grows in
-> later slices.
 
 ## Shared lint configuration
 

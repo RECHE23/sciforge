@@ -26,6 +26,8 @@ on:
       sciforge-ref:    { type: string, required: true }
       runner-mode:     { type: string, default: 'hosted' }
       makefile-subdir: { type: string, default: '' }
+      # A job invoked with `uses:` cannot carry timeout-minutes at the caller, so the ceiling lives here.
+      timeout-minutes: { type: number, default: 30 }
     secrets:
       ci-pat:          { required: false }
 
@@ -36,6 +38,7 @@ jobs:
   # Linux-only by nature (clang-tidy + uncrustify), so there is no platform matrix.
   route:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       linux: ${{ steps.pick.outputs.linux }}
       self:  ${{ steps.pick.outputs.self }}
@@ -59,6 +62,7 @@ jobs:
   format:
     needs: route
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       # Bootstrap SciForge (lint/ + the shared composite). A reusable workflow can
       # only reach a local action after its repo is checked out, so this prior
@@ -100,6 +104,7 @@ jobs:
   misra:
     needs: [route, format]
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       # Bootstrap SciForge (lint/ + the shared composite); see the format job.
       - uses: actions/checkout@v6

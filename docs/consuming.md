@@ -22,7 +22,7 @@ The consumers' Makefiles default `SCIFORGE_INCLUDE ?= ../sciforge/include` (and 
 Fetch a CalVer tag and use its include dir:
 
 ```cmake
-FetchContent_Declare(sciforge GIT_REPOSITORY https://github.com/RECHE23/sciforge GIT_TAG v2026.7.0)
+FetchContent_Declare(sciforge GIT_REPOSITORY https://github.com/RECHE23/sciforge GIT_TAG v2026.9.0)  # the latest tag
 FetchContent_MakeAvailable(sciforge)
 target_include_directories(your_target PRIVATE ${sciforge_SOURCE_DIR}/include)
 ```
