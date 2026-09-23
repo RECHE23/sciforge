@@ -15,10 +15,14 @@ on:
     tags: ["v*"]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   # Guard: on a version tag, the tag must match the sciforge-build version.
   check-version:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - name: Tag matches sciforge-build version
@@ -33,6 +37,7 @@ jobs:
   build:
     needs: check-version
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Build sdist + wheel (pure-Python, py3-none-any)
@@ -47,6 +52,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/v')
     environment: pypi
     permissions:
@@ -56,7 +62,8 @@ jobs:
         with:
           name: dist
           path: dist
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      # Pinned by commit: this third-party action runs with the OIDC token that publishes to PyPI.
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
 
   # The GitHub release, which nothing else creates: PyPI publishing does not, and a release made by
   # hand is the step that gets forgotten. Notes come from docs/release-notes/<tag>.md when the tag has

@@ -6,10 +6,14 @@ on:
     paths-ignore: ['**.md']   # doc-only pushes do not need the matrix
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   # Formatting gate: the whole C++ tree must be Uncrustify-clean.
   format:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       # The pinned Uncrustify binary never changes, so cache it and rebuild from
@@ -38,6 +42,7 @@ jobs:
   # Static analysis: clang-tidy over the self-test sources (validates .clang-tidy).
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Install clang-tidy
@@ -63,6 +68,7 @@ jobs:
           - os: macos-latest
             cxx: clang++
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Self-test (smoke + WILL_FAIL meta)
@@ -88,6 +94,7 @@ jobs:
   # Windows runner; --config/-C Release cover the multi-config MSVC generator).
   windows:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - name: Configure, build and self-test (MSVC)
@@ -107,6 +114,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Build and run the dummy consumer

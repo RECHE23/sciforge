@@ -45,6 +45,9 @@ on:
     secrets:
       ci-pat:          { required: false }
 
+permissions:
+  contents: read
+
 jobs:
   # Emit the self-hosted flag and the {os, py, runner} matrix (runner is a JSON-array
   # string consumed via fromJSON). All jq lives in this always-hosted job; the python
@@ -113,25 +116,35 @@ jobs:
       - name: Use pre-installed Python via venv (self-hosted Windows)
         if: needs.route.outputs.self == 'true' && matrix.leg.os == 'windows'
         shell: bash
+        env:
+          LEG_PY: ${{ matrix.leg.py }}
         run: |
-          py -${{ matrix.leg.py }} -m venv "$RUNNER_TEMP/venv-${{ matrix.leg.py }}"
-          cygpath -w "$RUNNER_TEMP/venv-${{ matrix.leg.py }}/Scripts" >> "$GITHUB_PATH"
+          py "-${LEG_PY}" -m venv "$RUNNER_TEMP/venv-${LEG_PY}"
+          cygpath -w "$RUNNER_TEMP/venv-${LEG_PY}/Scripts" >> "$GITHUB_PATH"
       - uses: actions/setup-python@v6
         if: ${{ !(needs.route.outputs.self == 'true' && matrix.leg.os == 'windows') }}
         with:
           python-version: ${{ matrix.leg.py }}
       - name: Build the binding
         shell: bash
+        env:
+          PROJECT_SUBDIR: ${{ inputs.project-subdir }}
+          PRE_INSTALL: ${{ inputs.pre-install }}
+          BUILD_CMD: ${{ inputs.build-cmd }}
         run: |
-          sub='${{ inputs.project-subdir }}'
+          sub="$PROJECT_SUBDIR"
           cd "consumer${sub:+/$sub}"
           python -m pip install --upgrade pip setuptools wheel
-          pre='${{ inputs.pre-install }}'
-          if [ -n "$pre" ]; then python -m pip install $pre; fi
-          ${{ inputs.build-cmd }}
+          # pre-install is a space-separated package list: split it into words, never into globs.
+          read -r -a pre <<< "$PRE_INSTALL"
+          if [ "${#pre[@]}" -gt 0 ]; then python -m pip install "${pre[@]}"; fi
+          eval "$BUILD_CMD"
       - name: Test
         shell: bash
+        env:
+          PROJECT_SUBDIR: ${{ inputs.project-subdir }}
+          TEST_CMD: ${{ inputs.test-cmd }}
         run: |
-          sub='${{ inputs.project-subdir }}'
+          sub="$PROJECT_SUBDIR"
           cd "consumer${sub:+/$sub}"
-          ${{ inputs.test-cmd }}
+          eval "$TEST_CMD"

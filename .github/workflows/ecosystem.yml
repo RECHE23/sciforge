@@ -21,20 +21,21 @@ permissions:
 jobs:
   heads-together:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       # The three repos as siblings under the workspace, so each repo's default sibling include paths
       # (../sciforge, ../real-regex) resolve with no overrides — the same layout maintainers use locally.
       - name: Check out sciforge
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: sciforge
       - name: Check out real-regex
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: RECHE23/real-regex
           path: real-regex
       - name: Check out scilex
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: RECHE23/scilex
           path: scilex

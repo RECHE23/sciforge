@@ -52,6 +52,9 @@ on:
     secrets:
       ci-pat:          { required: false }
 
+permissions:
+  contents: read
+
 jobs:
   # Emit the Linux runner labels, the self-hosted flag, and the posix + cmake
   # matrices (JSON arrays of legs; each leg's runner is a JSON-array string consumed
@@ -142,17 +145,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y g++-14
       - name: Test
         shell: bash
+        env:
+          MAKEFILE_SUBDIR: ${{ inputs.makefile-subdir }}
+          LEG_CXX: ${{ matrix.leg.cxx }}
         run: |
-          sub='${{ inputs.makefile-subdir }}'
+          sub="$MAKEFILE_SUBDIR"
           dir="consumer${sub:+/$sub}"
-          make -C "$dir" test CXX=${{ matrix.leg.cxx }} \
+          make -C "$dir" test CXX="$LEG_CXX" \
             SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge/include"
       - name: Sanitizers (ASan + UBSan)
         shell: bash
+        env:
+          MAKEFILE_SUBDIR: ${{ inputs.makefile-subdir }}
+          LEG_CXX: ${{ matrix.leg.cxx }}
         run: |
-          sub='${{ inputs.makefile-subdir }}'
+          sub="$MAKEFILE_SUBDIR"
           dir="consumer${sub:+/$sub}"
-          make -C "$dir" sanitize CXX=${{ matrix.leg.cxx }} \
+          make -C "$dir" sanitize CXX="$LEG_CXX" \
             SCIFORGE_INCLUDE="$GITHUB_WORKSPACE/sciforge/include"
 
   # Portable build entry: x86-64 Linux (routed), Windows/MSVC (routed) and native
@@ -187,12 +196,15 @@ jobs:
       # first so a stale CMakeCache or a leftover install can't poison the run.
       - name: Configure, build, test, install and find_package smoke
         shell: bash
+        env:
+          MAKEFILE_SUBDIR: ${{ inputs.makefile-subdir }}
+          DEPS_JSON: ${{ inputs.deps }}
         run: |
           set -e
           WS="$GITHUB_WORKSPACE"
           HARNESS="$WS/sciforge/include"
           STAGE="$WS/_stage"
-          sub='${{ inputs.makefile-subdir }}'
+          sub="$MAKEFILE_SUBDIR"
           proj="consumer${sub:+/$sub}"
           rm -rf "$STAGE"
           # Install the dependency chain (topological) so find_package(consumer)
@@ -201,7 +213,7 @@ jobs:
           # without jq): pull each "path" from the caller-controlled deps JSON with
           # sed. Paths contain no spaces, so word-splitting the list is safe; an
           # empty deps '[]' yields an empty list and the loop is skipped.
-          DEPS=$(printf '%s' '${{ inputs.deps }}' \
+          DEPS=$(printf '%s' "$DEPS_JSON" \
             | sed -e 's/},[[:space:]]*{/}\n{/g' \
             | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
           for dep in $DEPS; do

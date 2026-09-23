@@ -31,6 +31,9 @@ on:
     secrets:
       ci-pat:          { required: false }
 
+permissions:
+  contents: read
+
 jobs:
   # Emit the runner labels. 'routed' picks self-hosted only when the repository
   # owner pushes (a generic "the pusher owns this repo" gate, no hard-coded handle)
@@ -94,9 +97,11 @@ jobs:
           mkdir -p "$HOME/.local/bin" && cp uncrustify "$HOME/.local/bin/"
       - name: Format check
         shell: bash
+        env:
+          MAKEFILE_SUBDIR: ${{ inputs.makefile-subdir }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          sub='${{ inputs.makefile-subdir }}'
+          sub="$MAKEFILE_SUBDIR"
           dir="consumer${sub:+/$sub}"
           make -C "$dir" format-check SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge/lint"
 
@@ -129,7 +134,9 @@ jobs:
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
       - name: MISRA C++:2023-oriented analysis
         shell: bash
+        env:
+          MAKEFILE_SUBDIR: ${{ inputs.makefile-subdir }}
         run: |
-          sub='${{ inputs.makefile-subdir }}'
+          sub="$MAKEFILE_SUBDIR"
           dir="consumer${sub:+/$sub}"
           make -C "$dir" misra SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge/lint"
