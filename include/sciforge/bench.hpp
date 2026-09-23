@@ -24,6 +24,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -162,9 +163,14 @@ namespace sciforge::bench {
   //! \brief Renders \p value as a JSON number with %.6g (the round-trip precision contract).
   inline std::string json_number(double value)
   {
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), "%.6g", value);
-    return buffer;
+    char      buffer[64];
+    const int written {std::snprintf(buffer, sizeof(buffer), "%.6g", value)};
+    // %.6g needs at most 13 characters, so only an encoding error can fail here -- and it must not
+    // leave an indeterminate buffer in the emitted JSON.
+    if (written < 0 || static_cast<std::size_t>(written) >= sizeof(buffer)) {
+      throw std::runtime_error("json_number: snprintf failed");
+    }
+    return {buffer, static_cast<std::size_t>(written)};
   }
 
   //! \brief Joins pre-rendered JSON \p items with commas.

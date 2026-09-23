@@ -69,7 +69,7 @@ namespace sciforge::binding {
     constexpr std::size_t kN = traits::arity;
     try {
       const Py_ssize_t given = PyTuple_Size(args);
-      if (given != static_cast<Py_ssize_t>(kN)) {
+      if (std::cmp_not_equal(given, kN)) {
         throw cast_error("expected " + std::to_string(kN) + " argument(s), got " +
                          std::to_string(given));
       }
@@ -112,7 +112,10 @@ namespace sciforge::binding {
     const char* name;
     constexpr explicit arg(const char* n) : name(n)
     {}
+    // The `arg("x") = default` spelling (pybind11's): assignment BUILDS a defaulted_arg and leaves
+    // this arg untouched, so it deliberately returns neither `arg&` nor modifies `*this`.
     template <class T>
+    // NOLINTNEXTLINE(cppcoreguidelines-c-copy-assignment-signature,misc-unconventional-assign-operator)
     constexpr defaulted_arg<T> operator=(T v) const
     {
       return defaulted_arg<T> {name, v};
@@ -165,7 +168,9 @@ namespace sciforge::binding {
   inline void add_arg(kw_spec&   spec,
                       const arg& a)
   {
-    spec.kwlist.push_back(const_cast<char*>(a.name)); // PyArg's char** kwlist is read-only
+    // PyArg_ParseTupleAndKeywords reads the kwlist and never writes it, but before CPython 3.13's
+    // headers its parameter is `char**` -- and the bindings build against the 3.10/3.11 Limited API.
+    spec.kwlist.push_back(const_cast<char*>(a.name)); // NOLINT(cppcoreguidelines-pro-type-const-cast)
     spec.format += 'O';
     spec.defaults.push_back(nullptr);
   }
@@ -266,9 +271,10 @@ namespace sciforge::binding {
     // a METH_KEYWORDS function (signature self,args,kwargs) in a PyCFunction slot: a direct cast
     // between unrelated function-pointer types is ill-formed, so we route through void(*)() (as
     // CPython's own PyCFunction_NewEx and pybind11 do; ~14 sites across the ecosystem).
-    return PyMethodDef {name,
-                        reinterpret_cast<PyCFunction>(reinterpret_cast<void (*)()>(call_wrapper_kw<Getter, Func>)),
-                        METH_VARARGS | METH_KEYWORDS, doc};
+    return PyMethodDef {.ml_name  = name,
+                        .ml_meth  = reinterpret_cast<PyCFunction>(reinterpret_cast<void (*)()>(call_wrapper_kw<Getter, Func>)),
+                        .ml_flags = METH_VARARGS | METH_KEYWORDS,
+                        .ml_doc   = doc};
   }
 }  // namespace sciforge::binding
 

@@ -365,7 +365,11 @@ namespace sciforge::binding {
         return *this;
       }
       class_getsets<T>().push_back(
-        PyGetSetDef {name, property_getter<T, Getter, Get>, nullptr, const_cast<char*>(doc), nullptr});
+        PyGetSetDef {.name    = name,
+                     .get     = property_getter<T, Getter, Get>,
+                     .set     = nullptr,
+                     .doc     = doc,
+                     .closure = nullptr});
       return *this;
     }
 
@@ -411,7 +415,7 @@ namespace sciforge::binding {
       if (class_type<T>() != nullptr) {
         return *this;
       }
-      class_methods<T>().push_back(PyMethodDef {name, func, flags, doc});
+      class_methods<T>().push_back(PyMethodDef {.ml_name = name, .ml_meth = func, .ml_flags = flags, .ml_doc = doc});
       return *this;
     }
 
@@ -459,33 +463,33 @@ namespace sciforge::binding {
         PyModule_AddObjectRef(module_, attr, class_type<T>());
         return;
       }
-      class_methods<T>().push_back(PyMethodDef {nullptr, nullptr, 0, nullptr});
-      class_getsets<T>().push_back(PyGetSetDef {nullptr, nullptr, nullptr, nullptr, nullptr});
+      class_methods<T>().push_back(PyMethodDef {.ml_name = nullptr, .ml_meth = nullptr, .ml_flags = 0, .ml_doc = nullptr});
+      class_getsets<T>().push_back(PyGetSetDef {.name    = nullptr, .get = nullptr, .set = nullptr, .doc = nullptr, .closure = nullptr});
       // Up to nine slots: dealloc/methods/getset, optionally tp_repr / tp_richcompare / tp_hash,
       // optionally tp_new+tp_init when constructible, then the terminator.
       PyType_Slot  slots[9] = {};
       std::size_t  n        = 0;
       unsigned int flags    = Py_TPFLAGS_DEFAULT;
-      slots[n++] = {Py_tp_dealloc, reinterpret_cast<void*>(class_dealloc<T>)};
-      slots[n++] = {Py_tp_methods, static_cast<void*>(class_methods<T>().data())};
-      slots[n++] = {Py_tp_getset, static_cast<void*>(class_getsets<T>().data())};
+      slots[n++] = {.slot = Py_tp_dealloc, .pfunc = reinterpret_cast<void*>(class_dealloc<T>)};
+      slots[n++] = {.slot = Py_tp_methods, .pfunc = static_cast<void*>(class_methods<T>().data())};
+      slots[n++] = {.slot = Py_tp_getset, .pfunc = static_cast<void*>(class_getsets<T>().data())};
       if (repr_ != nullptr) {
-        slots[n++] = {Py_tp_repr, reinterpret_cast<void*>(repr_)};
+        slots[n++] = {.slot = Py_tp_repr, .pfunc = reinterpret_cast<void*>(repr_)};
       }
       if (richcompare_ != nullptr) {
-        slots[n++] = {Py_tp_richcompare, reinterpret_cast<void*>(richcompare_)};
+        slots[n++] = {.slot = Py_tp_richcompare, .pfunc = reinterpret_cast<void*>(richcompare_)};
       }
       if (hash_ != nullptr) {
-        slots[n++] = {Py_tp_hash, reinterpret_cast<void*>(hash_)};
+        slots[n++] = {.slot = Py_tp_hash, .pfunc = reinterpret_cast<void*>(hash_)};
       }
       if (init_ != nullptr) {
-        slots[n++] = {Py_tp_new, reinterpret_cast<void*>(PyType_GenericNew)};
-        slots[n++] = {Py_tp_init, reinterpret_cast<void*>(init_)};
+        slots[n++] = {.slot = Py_tp_new, .pfunc = reinterpret_cast<void*>(PyType_GenericNew)};
+        slots[n++] = {.slot = Py_tp_init, .pfunc = reinterpret_cast<void*>(init_)};
       }
       else {
         flags |= Py_TPFLAGS_DISALLOW_INSTANTIATION; // factory-only: no Python construction
       }
-      slots[n] = {0, nullptr};
+      slots[n] = {.slot = 0, .pfunc = nullptr};
       PyType_Spec spec {class_name<T>(), static_cast<int>(sizeof(wrapper<T>)), 0, flags, slots};
       PyObject  * type = PyType_FromSpec(&spec);
       if (type == nullptr) {

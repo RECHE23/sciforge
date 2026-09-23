@@ -67,8 +67,8 @@ Checks: >
   -readability-use-concise-preprocessor-directives,
   -readability-avoid-const-params-in-decls,
 
-# Don't treat warnings as errors (too strict for initial setup)
-# WarningsAsErrors: ''
+# Every finding fails `make lint`: a lint whose findings cannot fail it judges nothing.
+WarningsAsErrors: '*'
 
 CheckOptions:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -144,7 +144,7 @@ CheckOptions:
 # Header Filter (only check our code, not dependencies)
 # ═══════════════════════════════════════════════════════════════════════════
 
-HeaderFilterRegex: '.*/(include/real|tests)/.*'
+HeaderFilterRegex: '(^|.*/)(include/sciforge|tests)/.*'
 
 # Exclude system headers and third-party libraries
 SystemHeaders: false

@@ -20,7 +20,7 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest clean release help
+.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest clean release help
 
 PYTHON ?= python3
 
@@ -62,6 +62,17 @@ format-check:
 
 lint:
 	@ls tests/*.cpp | xargs -P $(JOBS) -I{} clang-tidy {} -- -std=c++20 -Iinclude
+	@$(MAKE) --no-print-directory lint-binding
+
+# The binding substrate (include/sciforge/binding/) is included by no test, so `lint` above never sees
+# it. The demo consumer instantiates every header's templates; --line-filter keeps the diagnostics to
+# the headers themselves, because the demo passes strings by value ON PURPOSE (it exercises the caster
+# paths) and its own findings are not the substrate's. Needs the Python headers.
+lint-binding:
+	@pyinc=$$($(PYTHON) -c 'import sysconfig; print(sysconfig.get_path("include"))'); \
+	 lf=$$($(PYTHON) -c "import glob,json; print(json.dumps([{'name': p} for p in sorted(glob.glob('include/sciforge/binding/*.hpp'))]))"); \
+	 clang-tidy examples/binding_consumer/bindingdemo/_demo.cpp --line-filter="$$lf" \
+	   -- -std=c++20 -Iinclude -I"$$pyinc" -DPy_LIMITED_API=0x030A0000
 
 # Self-test the shared MISRA base that SciForge ships for the whole ecosystem
 # (lint/clang-tidy-misra): it must parse and still behave (an enabled check fires,

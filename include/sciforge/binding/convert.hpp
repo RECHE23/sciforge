@@ -150,7 +150,7 @@ namespace sciforge::binding {
     if (data == nullptr) {
       throw cast_error("invalid str");
     }
-    return std::string_view(data, static_cast<std::size_t>(size));
+    return {data, static_cast<std::size_t>(size)};
   }
 
   // Shared str-out path: a new str from a UTF-8 byte range (std::string / std::string_view).
@@ -205,7 +205,7 @@ namespace sciforge::binding {
       if (PyBytes_AsStringAndSize(obj, &data, &size) < 0) {
         throw cast_error("invalid bytes");
       }
-      return bytes_view{data, size};
+      return bytes_view {.data = data, .size = size};
     }
   };
 
@@ -265,7 +265,7 @@ namespace sciforge::binding {
       if (tuple == nullptr) {
         throw cast_error("could not allocate tuple");
       }
-      set_all(tuple, std::move(values), std::index_sequence_for<Ts...> {});
+      set_all(tuple, values, std::index_sequence_for<Ts...> {}); // moves each element out of the local copy
       return tuple;
     }
 
@@ -273,7 +273,7 @@ namespace sciforge::binding {
 
     template <std::size_t... I>
     static void set_all(PyObject*                 tuple,
-                        std::tuple<Ts...>&&       values,
+                        std::tuple<Ts...>&        values,
                         std::index_sequence<I...> /*seq*/)
     {
       (set_item<I>(tuple, std::move(std::get<I>(values))), ...);

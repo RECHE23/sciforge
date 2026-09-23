@@ -65,7 +65,7 @@ namespace sciforge::binding {
                         int         flags,
                         const char* doc = nullptr)
     {
-      table_.push_back(PyMethodDef {name, func, flags, doc});
+      table_.push_back(PyMethodDef {.ml_name = name, .ml_meth = func, .ml_flags = flags, .ml_doc = doc});
       return *this;
     }
 

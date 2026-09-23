@@ -42,8 +42,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install clang-tidy
         run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - uses: actions/setup-python@v6   # the Python headers lint-binding compiles the substrate against
+        with:
+          python-version: '3.12'
       - name: Lint
-        run: make lint
+        run: make lint PYTHON=python
       - name: Self-test the shared MISRA base
         run: make lint-config
 
