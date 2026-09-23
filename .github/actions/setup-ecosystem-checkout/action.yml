@@ -16,7 +16,9 @@ description: >
 
 inputs:
   deps:
-    description: 'JSON array of {repo, path} dependency siblings, in topological order.'
+    description: >
+      JSON array of {repo, path[, ref]} dependency siblings, in topological order. `ref` is a
+      tag or branch to clone; without it the dependency's default branch is cloned.
     default: '[]'
   ci-pat:
     description: 'Token with read access for private dependency checkouts (optional).'
@@ -38,7 +40,7 @@ runs:
         # jq-free parse: this step runs on the job runner, including self-hosted
         # Windows where jq is not guaranteed. Split the compact JSON array into one
         # object per line, then extract repo/path with sed. The deps JSON shape is
-        # caller-controlled: [{"repo":"...","path":"..."},...]. The
+        # caller-controlled: [{"repo":"...","path":"...","ref":"..."},...], ref optional. The
         # `|| [ -n "$obj" ]` keeps the final object (no trailing newline after the
         # split).
         printf '%s' "$DEPS_JSON" \
@@ -47,6 +49,10 @@ runs:
               [ -z "$obj" ] && continue
               repo=$(printf '%s' "$obj" | sed -n 's/.*"repo"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
               path=$(printf '%s' "$obj" | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              ref=$(printf '%s' "$obj" | sed -n 's/.*"ref"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              # --branch takes a tag as well as a branch; a commit SHA is not accepted by a shallow clone.
+              set -- --depth 1
+              if [ -n "$ref" ]; then set -- "$@" --branch "$ref"; fi
               rm -rf "$path"
               # The token goes in a header for this one command (`git -c`, not `git clone -c`),
               # never in the URL: a URL credential is written to the clone's .git/config as its
@@ -54,8 +60,8 @@ runs:
               if [ -n "${GH_TOKEN:-}" ]; then
                 auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
                 git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-                  clone --depth 1 "https://github.com/$repo.git" "$path"
+                  clone "$@" "https://github.com/$repo.git" "$path"
               else
-                git clone --depth 1 "https://github.com/$repo.git" "$path"
+                git clone "$@" "https://github.com/$repo.git" "$path"
               fi
             done

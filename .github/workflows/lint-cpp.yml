@@ -11,7 +11,8 @@ name: lint-cpp (reusable)
 #
 # Inputs let one definition serve every repo:
 #   deps            JSON array of sibling checkouts the misra TU needs, e.g.
-#                   '[{"repo":"RECHE23/scilex","path":"scilex","private":true}]'
+#                   '[{"repo":"RECHE23/scilex","path":"scilex","ref":"v2026.9.0"}]';
+#                   `ref` (a tag or branch) is optional, the default branch otherwise
 #   sciforge-ref    the SciForge tag the consumer pins (the lint/ config source)
 #   runner-mode     'hosted' (GitHub runners) or 'routed' (self-hosted when the
 #                   maintainer pushes; GitHub-hosted for PRs / other actors)
