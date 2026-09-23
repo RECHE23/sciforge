@@ -18,6 +18,8 @@ SCENARIOS = {
     "expect_false":       (1, "1 checks failed"),
     "eq_mismatch":        (1, "1 checks failed"),
     "throws_on_nonthrow": (1, "1 checks failed"),
+    "mixed_sign_equal":   (0, "2 checks passed | 0 checks failed"),
+    "mixed_sign_negative": (1, "1 checks failed"),
     "counts":             (1, "2 checks passed | 1 checks failed"),
 }
 

@@ -12,6 +12,8 @@
 #include <exception>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace test {
@@ -108,7 +110,23 @@ namespace test {
       }
     }
 
+    /*!\brief An integer type `std::cmp_equal` accepts: integral, and neither `bool` nor a character type.
+     * \tparam T The type to classify (cv-qualifiers ignored).
+     */
+    template <typename T>
+    concept comparable_integer = std::is_integral_v<std::remove_cv_t<T>>
+                                 && !std::is_same_v<std::remove_cv_t<T>, bool>
+                                 && !std::is_same_v<std::remove_cv_t<T>, char>
+                                 && !std::is_same_v<std::remove_cv_t<T>, wchar_t>
+                                 && !std::is_same_v<std::remove_cv_t<T>, char8_t>
+                                 && !std::is_same_v<std::remove_cv_t<T>, char16_t>
+                                 && !std::is_same_v<std::remove_cv_t<T>, char32_t>;
+
     /*!\brief Checks that two values are equal.
+     *
+     * Two integers compare by VALUE (`std::cmp_equal`), not through `==`'s usual arithmetic
+     * conversions: `EXPECT_EQ(v.size(), 3)` compiles cleanly under `-Wsign-compare -Werror`, and `-1`
+     * never equals `SIZE_MAX` by wrapping. Everything else compares with `==`.
      * \tparam L     Type of the actual value.
      * \tparam R     Type of the expected value.
      * \param[in] actual   The value produced by the test.
@@ -124,7 +142,14 @@ namespace test {
                   int         line,
                   const char* expr)
     {
-      if (actual == expected) {
+      bool equal {false};
+      if constexpr (comparable_integer<L> && comparable_integer<R>) {
+        equal = std::cmp_equal(actual, expected);
+      }
+      else {
+        equal = (actual == expected);
+      }
+      if (equal) {
         ++checks_passed;
         return;
       }

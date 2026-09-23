@@ -105,7 +105,7 @@ corpus-selftest:
 # clean. The framework that judges every other test earns its own oracle.
 framework-selftest:
 	@mkdir -p $(BUILD)
-	@$(CXX) -std=c++20 -O2 -Iinclude tests/framework_selftest.cpp -o $(BUILD)/framework_selftest
+	@$(CXX) -std=c++20 -O2 -Wall -Wextra -Wsign-compare -Werror -Iinclude tests/framework_selftest.cpp -o $(BUILD)/framework_selftest
 	@$(PYTHON) tests/framework_selftest_driver.py $(BUILD)/framework_selftest
 
 # Selftest the C++ raw collector (include/sciforge/bench.hpp). Compiles tests/bench_emit.cpp

@@ -4,7 +4,10 @@
 // framework-selftest) runs it once per scenario and checks the exit code and the printed check counts.
 //
 // This is deliberately NOT part of the main test binary: several scenarios fail on purpose.
+#include <cstddef>
 #include <cstring>
+#include <limits>
+#include <vector>
 #include <stdexcept>
 
 #include <sciforge/test/framework.hpp>
@@ -35,10 +38,18 @@ TEST(selftest_scenario)
   else if (std::strcmp(g_scenario, "throws_on_nonthrow") == 0) {
     EXPECT_THROWS((void)0, std::runtime_error); // does not throw -> one failed check
   }
+  else if (std::strcmp(g_scenario, "mixed_sign_equal") == 0) {
+    const std::vector<int> v {1, 2, 3};
+    EXPECT_EQ(v.size(), 3);                                 // an unsigned size against an int literal: equal, and
+    EXPECT_EQ(3, v.size());                                 // it must compile under -Wsign-compare -Werror
+  }
+  else if (std::strcmp(g_scenario, "mixed_sign_negative") == 0) {
+    EXPECT_EQ(-1, std::numeric_limits<std::size_t>::max()); // equal only by wrapping: one failed check
+  }
   else if (std::strcmp(g_scenario, "counts") == 0) {
-    EXPECT(true);                               // 2 passed,
+    EXPECT(true);                                           // 2 passed,
     EXPECT(true);
-    EXPECT(false);                              // 1 failed -> summary must read "2 checks passed | 1 checks failed"
+    EXPECT(false);                                          // 1 failed -> summary must read "2 checks passed | 1 checks failed"
   }
 }
 
