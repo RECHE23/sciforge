@@ -57,3 +57,36 @@ jobs:
           name: dist
           path: dist
       - uses: pypa/gh-action-pypi-publish@v1.14.0
+
+  # The GitHub release, which nothing else creates: PyPI publishing does not, and a release made by
+  # hand is the step that gets forgotten. Notes come from docs/release-notes/<tag>.md when the tag has
+  # one, otherwise from the subjects of the commits since the previous tag, so the job never waits on a
+  # manual step; the built sdist and wheel are attached.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes="docs/release-notes/${TAG}.md"
+          if [ ! -f "$notes" ]; then
+            prev=$(git describe --tags --abbrev=0 --match 'v*' "${TAG}^" 2>/dev/null || true)
+            notes=$(mktemp)
+            git log --format='- %s' ${prev:+"$prev.."}"$TAG" > "$notes"
+          fi
+          gh release create "$TAG" --title "$TAG" --notes-file "$notes" --verify-tag dist/*
