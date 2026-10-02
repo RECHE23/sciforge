@@ -24,6 +24,8 @@ FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -na
 
 PYTHON ?= python3
 
+include lint/misra.mk
+
 .DEFAULT_GOAL := help
 
 help:
@@ -76,9 +78,12 @@ lint-binding:
 
 # Self-test the shared MISRA base that SciForge ships for the whole ecosystem
 # (lint/clang-tidy-misra): it must parse and still behave (an enabled check fires,
-# the documented deviations stay suppressed). Override the binary with CLANG_TIDY=.
+# the documented deviations stay suppressed), under the clang-tidy lint/misra.mk pins, and that pin must be the
+# only version the workflows name. Override the binary with CLANG_TIDY=.
 lint-config:
-	@CLANG_TIDY=$${CLANG_TIDY:-clang-tidy} lint/test/run.sh
+	@$(MISRA_TIDY_CHECK)
+	@CLANG_TIDY=$${CLANG_TIDY:-$(MISRA_TIDY)} lint/test/run.sh
+	@MISRA_TIDY_VERSION=$(MISRA_TIDY_VERSION) lint/test/misra_pin.sh
 
 # Build + run the binding selftest fixture under g++ (not just clang), against the
 # working-tree headers, so clang/g++ divergences on the template substrate are caught

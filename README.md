@@ -87,6 +87,12 @@ in `lint/`:
   its own `--header-filter`/synthetic TU, and — if it has one extra justified
   deviation — appends it on the command line with `--checks=…` rather than forking
   the file. Each consumer documents its deviations in its own `MISRA.md`.
+- **`lint/misra.mk`** — the clang-tidy version the base runs under, named once. A
+  consumer includes it and runs `$(MISRA_TIDY)` (clang-tidy-18 on the path, else
+  Homebrew's llvm@18) after `$(MISRA_TIDY_CHECK)`, which warns when only another
+  version is installed; CI's lint spine installs the version it reads there. The
+  versions disagree on what they flag, so a local analysis under another one can
+  pass code CI refuses.
 - **`lint/uncrustify.cfg`** — the formatter config, used verbatim by every repo's
   `make format` / `format-check`.
 
@@ -94,7 +100,8 @@ in `lint/`:
 behave — an enabled check fires, the documented deviations stay suppressed — so a
 future edit can't silently break a consumer. The check is behavioural (not
 `--verify-config`-strict) because the base deliberately disables checks that exist
-in only one clang-tidy version.
+in only one clang-tidy version. It runs under `$(MISRA_TIDY)`, and checks that no
+workflow names a clang-tidy version other than through `lint/misra.mk`.
 
 Resolve the path the same way as the headers — a sibling `../sciforge/lint` locally,
 or the pinned FetchContent checkout in CI.

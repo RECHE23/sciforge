@@ -45,8 +45,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+      # The version the consumers' MISRA runs under (lint/misra.mk), so the base is self-tested where it is used.
       - name: Install clang-tidy
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+        run: |
+          v=$(sed -n 's/^MISRA_TIDY_VERSION *:= *//p' lint/misra.mk)
+          case "$v" in ''|*[!0-9]*) echo "lint/misra.mk names no MISRA_TIDY_VERSION" >&2; exit 1;; esac
+          sudo apt-get update && sudo apt-get install -y clang-tidy "clang-tidy-$v"
       - uses: actions/setup-python@v6   # the Python headers lint-binding compiles the substrate against
         with:
           python-version: '3.12'

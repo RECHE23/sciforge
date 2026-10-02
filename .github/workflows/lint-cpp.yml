@@ -1,9 +1,8 @@
 name: lint-cpp (reusable)
 
 # Reusable lint spine for the ecosystem: runs a consumer's `make format-check`
-# and `make misra` against SciForge's shared lint/ config (cat-A), with the
-# clang-tidy-18 pin baked in so MISRA results are reproducible everywhere — closing
-# the local@22 vs CI@18 gap at the source. The consumer's Makefile already carries
+# and `make misra` against SciForge's shared lint/ config (cat-A), with the clang-tidy
+# version lint/misra.mk names installed, the one each consumer's `make misra` runs. The consumer's Makefile already carries
 # its own --header-filter, --checks and synthetic TU (cat-A), so this workflow only
 # needs to check out the consumer + its deps + SciForge, pin the toolchain, and run
 # the targets. SciForge passes SCIFORGE_LINT explicitly (absolute), so the relative
@@ -106,7 +105,7 @@ jobs:
           dir="consumer${sub:+/$sub}"
           make -C "$dir" format-check SCIFORGE_LINT="$GITHUB_WORKSPACE/sciforge/lint"
 
-  # After format: a red format-check must not burn a clang-tidy-18 install + MISRA run.
+  # After format: a red format-check must not burn a clang-tidy install + MISRA run.
   misra:
     needs: [route, format]
     runs-on: ${{ fromJSON(needs.route.outputs.linux) }}
@@ -125,14 +124,16 @@ jobs:
         with:
           deps: ${{ inputs.deps }}
           ci-pat: ${{ secrets.ci-pat }}
-      # Pin clang-tidy to 18 on hosted so MISRA matches the local pre-check and the
-      # self-hosted runners (also 18), and doesn't drift when the image bumps its
-      # default. Self-hosted already has the pinned binary.
-      - name: Install clang-tidy 18 (pinned)
+      # The pinned clang-tidy is the one lint/misra.mk names, the file every consumer's `make misra` includes, so
+      # CI and a local analysis run the same version; the image's default would drift. Self-hosted runners already
+      # have the pinned binary.
+      - name: Install the pinned clang-tidy
         if: needs.route.outputs.self != 'true'
         run: |
-          sudo apt-get update && sudo apt-get install -y clang-tidy-18
-          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
+          v=$(sed -n 's/^MISRA_TIDY_VERSION *:= *//p' sciforge/lint/misra.mk)
+          case "$v" in ''|*[!0-9]*) echo "lint/misra.mk names no MISRA_TIDY_VERSION" >&2; exit 1;; esac
+          sudo apt-get update && sudo apt-get install -y "clang-tidy-$v"
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy "/usr/bin/clang-tidy-$v" 100
       - name: MISRA C++:2023-oriented analysis
         shell: bash
         env:
