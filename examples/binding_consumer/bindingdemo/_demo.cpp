@@ -284,6 +284,19 @@ namespace {
     return Vec {x, scale.value_or(1), label};
   }
 
+  // Vec again, registered init_once: a second __init__ is refused.
+  struct FixedVec : Vec {};
+
+  FixedVec    make_fixed_vec(long long x)
+  {
+    return FixedVec {Vec {x, 1, "fixed"}};
+  }
+
+  long long   fixed_vec_x(const FixedVec& v)
+  {
+    return v.x;
+  }
+
   long long   vec_total(const Vec& v)
   {
     return v.x * v.scale;
@@ -314,6 +327,7 @@ namespace sciforge::binding {
 // The wrapped-type casters (one line per class_<T>).
 SCIFORGE_WRAPPED(Widget)
 SCIFORGE_WRAPPED(Vec)
+SCIFORGE_WRAPPED(FixedVec)
 
 SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
 {
@@ -365,6 +379,10 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   .def_init<&make_vec>(sb::arg("x"), sb::arg("scale") = sb::none, sb::arg("label") = "v")
   .def<&vec_total>("total", "x * scale")
   .def_prop_ro<&vec_label>("label", "the label");
+  m.type<FixedVec>("bindingdemo.FixedVec")
+  .init_once()
+  .def_init<&make_fixed_vec>(sb::arg("x"))
+  .def<&fixed_vec_x>("x", "x");
 
   // Negative compile-time proof: a specs/arity mismatch must NOT compile (the def's
   // static_assert). greater() takes two parameters; one arg() spec is a footgun

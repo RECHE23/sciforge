@@ -276,6 +276,13 @@ class DefInitTest(unittest.TestCase):
         v.__init__(2, 4)
         self.assertEqual(v.total(), 8)
 
+    def test_reinit_is_refused_when_init_once(self):  # a viewed type keeps its first value
+        v = bindingdemo.FixedVec(3)
+        with self.assertRaises(TypeError) as caught:
+            v.__init__(4)
+        self.assertIn("cannot be re-initialized", str(caught.exception))
+        self.assertEqual(v.x(), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

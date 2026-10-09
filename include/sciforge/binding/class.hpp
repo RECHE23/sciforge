@@ -59,6 +59,14 @@ namespace sciforge::binding {
     return name;
   }
 
+  // Whether T's __init__ refuses an instance that already holds a value (set by init_once).
+  template <class T>
+  inline bool& class_init_once()
+  {
+    static bool once = false;
+    return once;
+  }
+
   template <class T>
   inline std::vector<PyMethodDef>& class_methods()
   {
@@ -272,7 +280,7 @@ namespace sciforge::binding {
 
   // tp_init for a constructible wrapped type: parse the keyword arguments (the N3a arg-syntax
   // kw_spec), call the factory, and store its result as the held T — deleting any previous one
-  // so __init__ stays re-callable.
+  // so __init__ stays re-callable, unless the type is init_once.
   template <class T, PyObject* (*Getter)(), auto Factory>
   int class_init(PyObject* self,
                  PyObject* args,
@@ -280,6 +288,10 @@ namespace sciforge::binding {
   {
     using traits             = function_traits<decltype(Factory)>;
     constexpr std::size_t kN                     = traits::arity;
+    if (class_init_once<T>() && reinterpret_cast<wrapper<T>*>(self)->held != nullptr) {
+      PyErr_Format(PyExc_TypeError, "%s cannot be re-initialized", class_name<T>());
+      return -1;
+    }
     kw_spec&              spec                   = kw_spec_for<Factory>();
     PyObject*             objs[kN == 0 ? 1 : kN] = {};
     if (detail::parse_kw(args, kwds, spec.format.c_str(), spec.kwlist.data(), objs,
@@ -416,6 +428,15 @@ namespace sciforge::binding {
         return *this;
       }
       class_methods<T>().push_back(PyMethodDef {.ml_name = name, .ml_meth = func, .ml_flags = flags, .ml_doc = doc});
+      return *this;
+    }
+
+    // Refuse __init__ on an instance that already holds a value. A re-initialization deletes the
+    // held T, so a type whose data other objects view in place (an array interface, a buffer, a
+    // DLPack capsule) opts in: those views would read freed memory.
+    class_& init_once()
+    {
+      class_init_once<T>() = true;
       return *this;
     }
 

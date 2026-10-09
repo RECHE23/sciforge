@@ -15,6 +15,11 @@ per-project extension code to the module's own logic.
 - **`error.hpp`** — `SCIFORGE_BINDING_ERROR_GETTER;` plus `set_cpp_error(module_error)`: bridge an
   in-flight C++ exception to a Python error (`bad_alloc → MemoryError`, other `std::exception →` the
   module error), so no C++ exception crosses the C-API boundary.
+- **`class.hpp`** — `m.type<T>("pkg.Name")` wraps a C++ type: `.def<&fn>`, `.def_prop_ro<&fn>`, and
+  `.def_init<&factory>(arg(...)…)` to make it constructible from Python. `__init__` may be called again on
+  an instance and replaces its value, unless the type is `.init_once()`: a type whose data other objects
+  view in place (an array interface, a buffer, a DLPack capsule) opts in, since a second `__init__` would
+  free what those views read.
 - **`gil.hpp`** — `gil_release` (RAII): drop the GIL around a pure-C++ region and restore it on every
   exit, including a throw.
 
