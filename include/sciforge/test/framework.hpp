@@ -164,10 +164,15 @@ namespace test {
 
   /*!
    * \brief Runs all registered tests.
-   * \return 0 if all tests passed, 1 otherwise.
+   * \return 0 if all tests passed, 1 otherwise -- and 1 when none is registered, since a binary whose
+   *         test files were left out of the link has proved nothing.
    */
   inline int run_all()
   {
+    if (registry().empty()) {
+      std::printf("0 tests | 0 checks passed | 0 checks failed\nFAILED (no test registered)\n");
+      return 1;
+    }
     int tests_failed = 0;
     for (const auto& test_case : registry()) {
       detail::current_test   = test_case.name;

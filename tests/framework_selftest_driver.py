@@ -21,6 +21,7 @@ SCENARIOS = {
     "mixed_sign_equal":   (0, "2 checks passed | 0 checks failed"),
     "mixed_sign_negative": (1, "1 checks failed"),
     "counts":             (1, "2 checks passed | 1 checks failed"),
+    "no_tests":           (1, "FAILED (no test registered)"),
 }
 
 

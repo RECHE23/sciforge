@@ -59,5 +59,8 @@ int main(int    argc,
   if (argc > 1) {
     g_scenario = argv[1];
   }
+  if (std::strcmp(g_scenario, "no_tests") == 0) {
+    test::registry().clear();
+  }
   return test::run_all();
 }
