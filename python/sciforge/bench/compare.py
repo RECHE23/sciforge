@@ -17,12 +17,11 @@ A result mismatch (the gate failed) is never a win — it is excluded from the t
 fails the verdict.
 """
 
-import statistics
 from dataclasses import dataclass, field
 
 from .runner import batch_time, calibrate
 from .schema import Case
-from .stats import geomean_ci
+from .stats import hierarchical_geomean_ci
 
 # gc is toggled around the paired timed region, exactly as the single-fn collector does.
 import gc
@@ -97,8 +96,9 @@ def verdict(cases, key=None, subject_label="subject", bootstrap=1000, rng=None):
     """Aggregate comparison `cases` into a CI-aware :class:`Verdict`.
 
     `key(case) -> bool` selects the cases that gate the verdict (default: those without a
-    falsey ``key`` field). The geometric mean of the per-case median ratios gets a bootstrap CI;
-    the subject is "faster" only if the CI clears 1.0, "slower" only if wholly below, else
+    falsey ``key`` field). The geometric mean of the per-case median ratios gets a bootstrap CI
+    that resamples the cases and, within each, its paired ratios, so a noisy case widens it; the
+    subject is "faster" only if the CI clears 1.0, "slower" only if wholly below, else
     "indecisive". Any key-case mismatch is listed and fails `passed` (a wrong answer is never a
     win). `subject_label` names the subject in the text (data from the consumer, e.g. "REAL").
     """
@@ -107,17 +107,17 @@ def verdict(cases, key=None, subject_label="subject", bootstrap=1000, rng=None):
             return bool(case.extra.get("key", True))
     key_cases = [case for case in cases if key(case)]
     mismatched = [case.name for case in key_cases if case.extra.get("mismatch")]
-    medians = [statistics.median(case.extra["ratios"])
-               for case in key_cases
-               if not case.extra.get("mismatch") and case.extra.get("ratios")]
+    groups = [case.extra["ratios"]
+              for case in key_cases
+              if not case.extra.get("mismatch") and case.extra.get("ratios")]
     passed = not mismatched
 
-    if not medians:
+    if not groups:
         note = f"; {len(mismatched)} result mismatch(es): {', '.join(mismatched)}" if mismatched else ""
         return Verdict(0.0, 0.0, 0.0, "no-data", mismatched, passed,
                        f"no comparable key cases{note}")
 
-    geomean, ci_low, ci_high = geomean_ci(medians, B=bootstrap, rng=rng)
+    geomean, ci_low, ci_high = hierarchical_geomean_ci(groups, B=bootstrap, rng=rng)
     if ci_low > 1.0:
         classification = "faster"
         text = f"{subject_label} faster overall: {geomean:.2f}x [{ci_low:.2f}-{ci_high:.2f}] (CI clears 1.0)"

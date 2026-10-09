@@ -96,6 +96,19 @@ class VerdictTest(unittest.TestCase):
         self.assertLessEqual(result.ci_low, 1.0)
         self.assertGreaterEqual(result.ci_high, 1.0)
 
+    def test_a_noisy_case_widens_the_interval(self):
+        # One case whose median ratio is 1.02 but whose paired ratios scatter from 0.7 to 1.4: a CI
+        # over the case medians alone collapses to [1.02, 1.02] and calls it faster. The ratios
+        # inside the case are the noise, so the call is indecisive.
+        noisy = [0.7, 1.4, 0.8, 1.3, 1.02, 0.9, 1.2, 1.02, 0.75, 1.35, 1.02]
+        result = verdict([_case("noisy", noisy)])
+        self.assertEqual(result.classification, "indecisive")
+        self.assertLess(result.ci_low, 1.0)
+        self.assertAlmostEqual(result.geomean, 1.02)
+        # The same median with tight ratios stays faster: the width comes from the scatter.
+        tight = verdict([_case("tight", [1.019, 1.02, 1.021, 1.02, 1.02, 1.02])])
+        self.assertEqual(tight.classification, "faster")
+
     def test_key_selects_gating_cases(self):
         # The non-key case is slower but excluded; the verdict reflects only the key case.
         cases = [_case("keyed", [2.0] * 6, key=True), _case("ignored", [0.1] * 6, key=False)]

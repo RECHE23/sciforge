@@ -15,6 +15,7 @@ from .stats import (
     ascii_ecdf,
     bootstrap_ci,
     geomean_ci,
+    hierarchical_geomean_ci,
     median_iqr,
     ratio_ci,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "bootstrap_ci",
     "ratio_ci",
     "geomean_ci",
+    "hierarchical_geomean_ci",
     "ascii_boxplot",
     "ascii_ecdf",
 ]

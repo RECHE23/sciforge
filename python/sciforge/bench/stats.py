@@ -107,6 +107,37 @@ def geomean_ci(paired_ratios, B=1000, level=0.95, rng=None):
     return point, low, high
 
 
+def hierarchical_geomean_ci(groups, B=1000, level=0.95, rng=None):
+    """Geometric mean of per-group MEDIAN ratios, with a bootstrap CI over both levels of noise.
+
+    `groups` is one list of paired ratios per case. Each replicate resamples the cases with
+    replacement and, inside each drawn case, its ratios, then takes the geometric mean of the
+    medians. Resampling the medians alone would ignore how noisy each case is: one case gives a
+    zero-width interval at its median however much its ratios scatter. Returns (geomean, low,
+    high) in ratio units.
+    """
+    if not groups or not all(groups):
+        raise ValueError("hierarchical_geomean_ci needs at least one group, and no empty group")
+    rng = rng if rng is not None else random.Random(0)
+
+    def geomean_of(medians):
+        return math.exp(statistics.fmean(math.log(value) for value in medians))
+
+    point = geomean_of([statistics.median(group) for group in groups])
+    boots = []
+    for _ in range(B):
+        medians = []
+        for _ in range(len(groups)):
+            group = groups[rng.randrange(len(groups))]
+            medians.append(statistics.median([group[rng.randrange(len(group))] for _ in group]))
+        boots.append(geomean_of(medians))
+    boots.sort()
+    alpha = (1.0 - level) / 2.0
+    low = boots[_clamp(int(alpha * B), B)]
+    high = boots[_clamp(int(round((1.0 - alpha) * B)) - 1, B)]
+    return point, low, high
+
+
 def ascii_boxplot(series, labels, width=44):
     """Render stacked horizontal box-plots on a shared axis (Unicode box-drawing).
 
