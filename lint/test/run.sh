@@ -27,7 +27,8 @@ expect_present() { echo "$out" | grep -q "$1" || { echo "lint-config: FAIL — e
 expect_absent()  { echo "$out" | grep -q "$1" && { echo "lint-config: FAIL — unexpected '$1' (deviation lost?)" >&2; fail=1; } || true; }
 
 expect_present 'modernize-use-nullptr'   # (1) an enabled base check still fires
-expect_absent  'signed-bitwise'          # (2) IgnorePositiveIntegerLiterals still applied
+expect_absent  'probe.cpp:19:.*signed-bitwise'  # (2) IgnorePositiveIntegerLiterals still applied
+expect_present 'probe.cpp:26:.*signed-bitwise'  # (2b) ...on a check that is still on
 expect_absent  'avoid-magic-numbers'     # (3) a documented base deviation still applied
 
 [ "$fail" -eq 0 ] && echo "lint-config: OK — shared MISRA base parses and behaves"

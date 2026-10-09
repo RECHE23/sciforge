@@ -19,6 +19,13 @@ namespace {
     return a >> 32; // expect no finding
   }
 
+  // (2b) MUST be reported: two signed operands of a bitwise operator. Without this, (2) also
+  //      holds when hicpp-signed-bitwise is off altogether, and would guard nothing.
+  int signed_and(int a, int b)
+  {
+    return a & b; // expect hicpp-signed-bitwise
+  }
+
   // (3) MUST NOT be reported: a bare numeric literal
   //     (cppcoreguidelines-avoid-magic-numbers is a documented base deviation).
   int magic()
