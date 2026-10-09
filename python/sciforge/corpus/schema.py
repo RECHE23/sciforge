@@ -126,6 +126,19 @@ class Case:
         return self
 
 
+def expectation_holds(expected, observed):
+    """True when `observed` meets the stored `expected`, which constrains only what it states: a match
+    lists its whole span and its FIRST k group spans (a Fowler outcome may stop before the last group,
+    and Go compares only that prefix), and a finditer list matches element by element."""
+    if isinstance(expected, dict) and isinstance(observed, dict):
+        stated = expected.get("groups", [])
+        return (expected.get("span") == observed.get("span")
+                and observed.get("groups", [])[:len(stated)] == stated)
+    if isinstance(expected, list) and isinstance(observed, list):
+        return len(expected) == len(observed) and all(map(expectation_holds, expected, observed))
+    return expected == observed
+
+
 def classify(real_result,
              oracle_result,
              corpus_expected,
@@ -159,7 +172,7 @@ def classify(real_result,
     #    disagrees with what the oracle produces) is outside this corpus's contract with our oracle.
     if (semantics != ORACLE_SEMANTICS.get(oracle)
             and corpus_expected is not None
-            and corpus_expected != oracle_result):
+            and not expectation_holds(corpus_expected, oracle_result)):
         return OUT_OF_CONTRACT
     # 3. The engine agrees with the authority.
     if real_result == oracle_result:

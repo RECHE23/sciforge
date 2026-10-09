@@ -179,36 +179,130 @@ def load_cases_rust_toml(path):
     return cases, filtered
 
 
-def load_cases_dat(path, manifest, *, encoding="latin-1"):
-    """Adapter for a Fowler / Go ``testregex`` ``.dat`` corpus into :class:`Case` records.
+#: The control prefixes of a Fowler flag field (``?test``, ``{test`` …): Go strips one and runs the rest.
+_DAT_CONTROL = "?&|;{}"
+#: What Go's ``regexp.QuoteMeta`` escapes, for the literal (``L``) mode.
+_DAT_META = frozenset("\\.+*?()|[]{}^$")
+_DAT_ESCAPES = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v",
+                "\\": "\\", '"': '"'}
 
-    Each data line is tab-separated: ``flags  pattern  input  expected-spans …``. Comment lines
-    (starting ``#``) and ``NOTE`` / blank lines are skipped. ``expected`` is a `(start,end)` span or
-    ``None`` for the ``NOMATCH`` sentinel; the caller supplies the :class:`Manifest` (the ``.dat`` file
-    carries no provenance of its own).
+
+def _dat_unquote(field):
+    """Expand a field's C escapes as Go's ``strconv.Unquote`` does for the ``$`` flag; ``None`` when Go
+    would refuse it."""
+    out, i = [], 0
+    while i < len(field):
+        char = field[i]
+        if char != "\\":
+            out.append(char)
+            i += 1
+            continue
+        code = field[i + 1:i + 2]
+        if code in _DAT_ESCAPES:
+            out.append(_DAT_ESCAPES[code])
+            i += 2
+            continue
+        width = {"x": 2, "u": 4, "U": 8}.get(code)
+        digits, base, skip = (field[i + 2:i + 2 + width], 16, 2 + width) if width else (field[i + 1:i + 4], 8, 4)
+        try:
+            out.append(chr(int(digits, base)))
+        except ValueError:
+            return None
+        if len(digits) != skip - (2 if width else 1):
+            return None
+        i += skip
+    return "".join(out)
+
+
+def _parse_dat_result(field):
+    """Field 4 of a Fowler line, as Go's ``parseFowlerResult`` reads it: ``NOMATCH`` -> ``None``, a POSIX
+    error code (an upper-case word) -> ``"error"``, else the match array ``(a,b)(c,d)…`` -> the whole-match
+    span plus the group spans it lists, ``?`` read as -1. Returns ``(expected, ok)``."""
+    if field == "NOMATCH":
+        return None, True
+    if "A" <= field[0] <= "Z":
+        return "error", True
+    values, rest = [], field
+    while rest:
+        if len(values) % 2 == 0:
+            if not rest.startswith("("):
+                return None, False
+            rest, end = rest[1:], ","
+        else:
+            end = ")"
+        stop = rest.find(end)
+        if stop <= 0:
+            return None, False
+        token, rest = rest[:stop], rest[stop + 1:]
+        try:
+            values.append(-1 if token == "?" else int(token))
+        except ValueError:
+            return None, False
+    if len(values) % 2:
+        return None, False
+    pairs = [values[k:k + 2] for k in range(0, len(values), 2)]
+    return {"span": pairs[0], "groups": pairs[1:]}, True
+
+
+def load_cases_dat(path, manifest, *, encoding="latin-1", with_filtered=False):
+    """Adapter for a Fowler / Go ``testregex`` ``.dat`` corpus into :class:`Case` records, read as Go's
+    ``regexp`` ``testFowler`` reads it.
+
+    A line is fields separated by RUNS of tabs: flags, pattern, input, outcome, an optional comment.
+    ``NULL`` is the empty string; a line with ``NIL`` is skipped. A flag field starting with a control
+    character (``?&|;{}``) runs with that character stripped; ``:comment:flags`` runs its flags; a
+    ``C`` / ``N[OTE]`` / ``T[EST]`` / numeric line is not a test. ``$`` expands C escapes in the pattern
+    and input, ``SAME`` repeats the previous pattern, ``i`` sets ``icase``. Each mode letter the line
+    names yields a case: ``E`` (extended, the pattern as written) and ``L`` (literal, the pattern
+    quoted); the other modes (``B`` basic, ``A``, ``S``, ``K``) are not run, as in Go. The outcome is
+    :func:`_parse_dat_result`'s. The caller supplies the :class:`Manifest` (the ``.dat`` file carries no
+    provenance of its own).
+
+    Returns the cases, or ``(cases, filtered)`` with ``with_filtered``: `filtered` counts the test
+    lines that yield no case (only unsupported modes, ``NIL``, an escape or outcome Go cannot read).
     """
-    cases = []
+    cases, filtered, last_pattern = [], 0, ""
     with open(path, "r", encoding=encoding) as handle:
         for raw in handle:
             line = raw.rstrip("\n")
-            if not line or line.startswith("#") or line.startswith("NOTE"):
+            if not line or line.startswith("#"):
                 continue
-            fields = line.split("\t")
-            if len(fields) < 4:
+            fields = [part for part in line.split("\t") if part]
+            if not fields:
                 continue
-            _flags, pattern, text, expected = fields[0], fields[1], fields[2], fields[3]
-            text = "" if text == "NULL" else text
-            span = None if expected in ("NOMATCH", "NULL") else _parse_dat_span(expected)
-            cases.append(Case(pattern=pattern, input=text,
-                              expected=None if span is None else {"span": list(span), "groups": []}))
-    return cases
-
-
-def _parse_dat_span(field):
-    """Parse a Fowler expected field's whole-match span ``(a,b)`` (the first group), else ``None``."""
-    first = field.split(")")[0].lstrip("(")
-    try:
-        start, end = first.split(",")
-        return int(start), int(end)
-    except ValueError:
-        return None
+            flags = fields[0]
+            if flags[0] in _DAT_CONTROL:
+                flags = flags[1:]
+                if not flags:
+                    continue
+            elif flags[0] == ":":
+                _comment, colon, flags = flags[1:].partition(":")
+                if not colon:
+                    continue
+            elif flags[0] in "CNT0123456789":
+                continue
+            if len(fields) < 4 or "NIL" in fields:
+                filtered += 1
+                continue
+            fields = ["" if part == "NULL" else part for part in fields]
+            pattern, text = fields[1], fields[2]
+            if "$" in flags:
+                pattern, text = _dat_unquote(pattern), _dat_unquote(text)
+                if pattern is None or text is None:
+                    filtered += 1
+                    continue
+            if pattern == "SAME":
+                pattern = last_pattern
+            last_pattern = pattern
+            expected, ok = _parse_dat_result(fields[3])
+            modes = [mode for mode in flags if mode in "EL"]
+            if not ok or not modes:
+                filtered += 1
+                continue
+            case_flags = ["icase"] if "i" in flags else []
+            for mode in modes:
+                source = pattern if mode == "E" else "".join(
+                    "\\" + char if char in _DAT_META else char for char in pattern)
+                cases.append(Case(pattern=source, input=text, expected=expected,
+                                  flags=list(case_flags)).validate())
+    return (cases, filtered) if with_filtered else cases

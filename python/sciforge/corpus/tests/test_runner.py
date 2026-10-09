@@ -107,21 +107,45 @@ class TestLoaders(unittest.TestCase):
             os.unlink(path)
 
     def test_dat_adapter(self):
+        # Lines in the Fowler layout, read as Go's testFowler reads them: fields split on RUNS of tabs,
+        # NULL empty, SAME the previous pattern, $ C escapes, control and :comment: prefixes, i icase,
+        # E as written and L quoted, B (basic) and NIL lines not run, a POSIX error code a rejection.
         data = "\n".join([
             "# a comment",
             "NOTE something",
-            "\ta+\taaa\t(0,3)",       # a match with a whole-match span
-            "\tb+\taaa\tNOMATCH",     # a no-match sentinel
+            "BE\ta...b\t\tabababbb\t\t(2,7)",
+            "E\t(a)|(b)\t\tb\t\t(0,1)(?,?)(0,1)",
+            "E\tSAME\t\tc\t\tNOMATCH",
+            "E\ta{1\t\tNULL\tEBRACE",
+            "BE$\t\\na\t\t\\x01a\t(1,2)",
+            "{E\ta+\taa\t(0,2)",
+            "}",
+            ":HA#1:E\tx\tx\t(0,1)",
+            "Ei\tA\ta\t(0,1)",
+            "L\ta.b\ta.b\t(0,3)",
+            "B\t\\(a\\)\ta\t(0,1)(0,1)",
+            "E\ta\tNIL\t(0,1)",
+            "C\tde_DE\t\t",
         ])
         with tempfile.NamedTemporaryFile("w", suffix=".dat", delete=False) as handle:
             handle.write(data)
             path = handle.name
         try:
-            manifest = _manifest(semantics="posix")
-            cases = load_cases_dat(path, manifest)
-            self.assertEqual(len(cases), 2)
-            self.assertEqual(cases[0].expected["span"], [0, 3])
-            self.assertIsNone(cases[1].expected)
+            cases, filtered = load_cases_dat(path, _manifest(semantics="posix"), with_filtered=True)
+            self.assertEqual(filtered, 2)  # the B-only line and the NIL line
+            read = [(case.pattern, case.input, case.expected, case.flags) for case in cases]
+            self.assertEqual(read, [
+                ("a...b", "abababbb", {"span": [2, 7], "groups": []}, []),
+                ("(a)|(b)", "b", {"span": [0, 1], "groups": [[-1, -1], [0, 1]]}, []),
+                ("(a)|(b)", "c", None, []),
+                ("a{1", "", "error", []),
+                ("\na", "\x01a", {"span": [1, 2], "groups": []}, []),
+                ("a+", "aa", {"span": [0, 2], "groups": []}, []),
+                ("x", "x", {"span": [0, 1], "groups": []}, []),
+                ("A", "a", {"span": [0, 1], "groups": []}, ["icase"]),
+                ("a\\.b", "a.b", {"span": [0, 3], "groups": []}, []),
+            ])
+            self.assertEqual(load_cases_dat(path, _manifest(semantics="posix")), cases)
         finally:
             os.unlink(path)
 

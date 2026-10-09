@@ -99,6 +99,20 @@ class TestTrapCases(unittest.TestCase):
                      semantics="leftmost-longest", oracle="python_re"),
             BUG)  # corpus_expected == oracle_result, so this row IS in contract -> a real miss is a bug
 
+    def test_an_expectation_constrains_only_the_groups_it_states(self):
+        # A Fowler outcome may list fewer groups than the pattern has; the oracle reports all of them.
+        # Agreeing on what is stated keeps the row in contract, so a real miss there is a bug.
+        stated = {"span": [0, 2], "groups": [[0, 1]]}
+        oracle = {"span": [0, 2], "groups": [[0, 1], [1, 2]]}
+        self.assertEqual(classify(real_result={"span": [0, 1], "groups": [[0, 1], [-1, -1]]},
+                                  oracle_result=oracle, corpus_expected=stated,
+                                  semantics="posix", oracle="python_re"), BUG)
+        self.assertEqual(classify(real_result=oracle, oracle_result=oracle,
+                                  corpus_expected={"span": [0, 2], "groups": [[1, 2]]},
+                                  semantics="posix", oracle="python_re"), OUT_OF_CONTRACT)
+        self.assertEqual(classify(real_result=[oracle], oracle_result=[oracle], corpus_expected=[stated],
+                                  semantics="posix", oracle="python_re"), PASS)
+
     def test_real_only_corpus_never_out_of_contract(self):
         # real_only: the corpus IS real's pinned behaviour, so semantics match by definition.
         self.assertEqual(
