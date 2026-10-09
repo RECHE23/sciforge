@@ -58,7 +58,9 @@ is `out_of_contract` only when the manifest `semantics` differs from the oracle'
 
 - **Native format: TOML** — it maps almost one-for-one onto the rust-regex corpus format, so their
   files come in with a thin reader. A Fowler/`glibc` `.dat` file is read through a **small adapter**, not
-  a second native format.
+  a second native format; it reads each line as Go's `regexp` `testFowler` does (fields split on runs of
+  tabs, `SAME`, `$` escapes, the `E` and `L` modes run and the others counted as filtered), and an
+  outcome that lists fewer groups than the pattern has constrains only the groups it lists.
 - **Fields:** `pattern`, `input`, `expected` (spans + groups for a matcher, a token list for a lexer, or
   absent for a no-match), `flags` (engine flag names from a **closed vocabulary** — `ascii`, `dotall`,
   `icase`, `multiline`, `verbose`; an unknown name is a schema error, never a silent no-op), an optional

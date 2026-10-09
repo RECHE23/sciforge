@@ -19,7 +19,7 @@ int main() { return test::run_all(); }
 ```
 
 `TEST(name){…}` registers a case; `EXPECT_EQ` / `EXPECT_THROWS` report failures but never abort, so one
-failing test does not hide the rest. `run_all()` returns non-zero on any failure (ctest-friendly).
+failing test does not hide the rest. `run_all()` returns non-zero on any failure (ctest-friendly), and when no test is registered.
 
 ## `strings.hpp`
 
