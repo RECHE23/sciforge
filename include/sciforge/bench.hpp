@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <stdexcept>
@@ -140,17 +141,31 @@ namespace sciforge::bench {
 
   // --- a tiny, comma-safe JSON emitter (the values of object pairs are pre-rendered JSON) ----
 
-  //! \brief Renders \p value as a JSON string (quotes + escapes ", \\ and newlines).
+  //! \brief Renders \p value as a JSON string: `"` and `\\` escaped, and every control character, which
+  //!        JSON forbids raw in a string, as its short escape or `\u00XX`.
   inline std::string json_string(const std::string& value)
   {
     std::string out = "\"";
     for (const char c : value) {
+      const auto code = static_cast<unsigned char>(c);
       if ((c == '"') || (c == '\\')) {
         out += '\\';
         out += c;
       }
       else if (c == '\n') {
         out += "\\n";
+      }
+      else if (c == '\t') {
+        out += "\\t";
+      }
+      else if (c == '\r') {
+        out += "\\r";
+      }
+      else if (code < 0x20U) {
+        constexpr std::string_view hex {"0123456789abcdef"};
+        out += "\\u00";
+        out += hex[code >> 4U];
+        out += hex[code & 0x0FU];
       }
       else {
         out += c;
@@ -160,9 +175,17 @@ namespace sciforge::bench {
     return out;
   }
 
-  //! \brief Renders \p value as a JSON number with %.6g (the round-trip precision contract).
+  //! \brief Renders \p value as a JSON number with %.6g (the round-trip precision contract). A NaN or
+  //!        an infinity is spelled `NaN` / `Infinity` / `-Infinity`, as Python's json writes and reads
+  //!        them (schema.run_to_json), not printf's `nan` / `inf`, which no JSON reader accepts.
   inline std::string json_number(double value)
   {
+    if (std::isnan(value)) {
+      return "NaN";
+    }
+    if (std::isinf(value)) {
+      return (value > 0.0) ? "Infinity" : "-Infinity";
+    }
     char      buffer[64];
     const int written {std::snprintf(buffer, sizeof(buffer), "%.6g", value)};
     // %.6g needs at most 13 characters, so only an encoding error can fail here -- and it must not

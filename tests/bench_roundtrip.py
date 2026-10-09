@@ -7,6 +7,7 @@ load_run can read what any *_bench.cpp produces. Exits non-zero on any divergenc
 """
 
 import json
+import math
 import sys
 
 from sciforge.bench import run_from_json
@@ -42,10 +43,10 @@ def main():
     errors = []
     if run.meta.get("bench") != "selftest":
         errors.append(f"meta.bench = {run.meta.get('bench')!r}")
-    if len(run.cases) != 2:
-        errors.append(f"expected 2 cases, got {len(run.cases)}")
+    if len(run.cases) != 3:
+        errors.append(f"expected 3 cases, got {len(run.cases)}")
     else:
-        alpha, beta = run.cases
+        alpha, beta, gamma = run.cases
         if alpha.name != "alpha" or alpha.unit != "s":
             errors.append(f"alpha name/unit = {alpha.name!r}/{alpha.unit!r}")
         if not _samples_match(alpha.samples, [1e-6, 2e-6, 3e-6]):
@@ -60,11 +61,19 @@ def main():
             errors.append(f"beta.result = {beta.result!r}")
         if beta.extra.get("size") != 1024:
             errors.append(f"beta.extra.size = {beta.extra.get('size')!r}")
+        if gamma.name != "gamma\t\"\\\r\x01\x1f":            # control characters escaped, not raw
+            errors.append(f"gamma.name = {gamma.name!r}")
+        if gamma.extra.get("note") != "a\nb\x7f":
+            errors.append(f"gamma.extra.note = {gamma.extra.get('note')!r}")
+        nan, pos, neg = (gamma.samples + [0.0] * 3)[:3]
+        if not (math.isnan(nan) and pos == math.inf and neg == -math.inf):
+            errors.append(f"gamma.samples = {gamma.samples}")
 
     if errors:
         print("roundtrip FAIL: " + "; ".join(errors), file=sys.stderr)
         return 1
-    print("roundtrip OK: 2 cases, domain fields + result preserved, samples within %.6g precision")
+    print("roundtrip OK: 3 cases, domain fields + result preserved, control characters escaped, "
+          "non-finite samples read back, samples within %.6g precision")
     return 0
 
 

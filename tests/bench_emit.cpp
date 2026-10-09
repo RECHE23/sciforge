@@ -69,6 +69,11 @@ int main()
   cases.push_back(bench::emit_case("beta", "s", {4e-6, 5e-6},
                                    {{"size", bench::json_number(1024.0)}},
                                    bench::json_string("ok")));
+  // Every control character JSON forbids raw in a string, and the non-finite samples printf spells
+  // in a way no JSON reader takes.
+  cases.push_back(bench::emit_case(std::string("gamma\t\"\\\r\x01\x1f", 11), "s",
+                                   {std::nan(""), HUGE_VAL, -HUGE_VAL},
+                                   {{"note", bench::json_string("a\nb\x7f")}}));
 
   std::printf("%s\n", bench::emit_run(meta, cases).c_str());
 
