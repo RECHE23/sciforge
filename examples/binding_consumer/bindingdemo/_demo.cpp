@@ -263,6 +263,22 @@ namespace {
     return 2 * (g.w + g.h);
   }
 
+  // Containers whose inner element fails to convert (not UTF-8): Python's error, nothing leaked.
+  std::vector<std::vector<std::string>> nested_bad()
+  {
+    return {{"ok"}, {"ok", std::string("\xff")}};
+  }
+
+  std::tuple<std::string, std::string> tuple_bad()
+  {
+    return {"ok", std::string("\xff")};
+  }
+
+  bool negate(bool b)
+  {
+    return !b;
+  }
+
   // Unsigned 64-bit, past long long's range both ways.
   std::uint64_t echo_u64(std::uint64_t n)
   {
@@ -388,6 +404,9 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.def<&make_widget>("make_widget", "w, h -> Widget");
   m.def<&widget_perimeter>("widget_perimeter", "Widget -> 2*(w+h)");
   m.def<&echo_u64>("echo_u64", "n (unsigned 64-bit) -> n");
+  m.def<&nested_bad>("nested_bad", "-> a list of lists whose last str is not UTF-8");
+  m.def<&tuple_bad>("tuple_bad", "-> a tuple whose last str is not UTF-8");
+  m.def<&negate>("negate", "b -> not b");
   m.def<&u64_max>("u64_max", "-> 2**64 - 1");
   // N3b — a Python-constructible type (.def_init with optional/keyword args).
   m.type<Vec>("bindingdemo.Vec")

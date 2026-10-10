@@ -15,6 +15,8 @@
 
 #include <Python.h>
 
+#include <sciforge/binding/error.hpp>
+
 #include <cstddef>
 #include <limits>
 #include <optional>
@@ -79,7 +81,7 @@ namespace sciforge::binding {
     {
       const int truth = PyObject_IsTrue(obj);
       if (truth < 0) {
-        throw cast_error("expected a truth value");
+        throw error_already_set {}; // __bool__ raised: its error stands
       }
       return truth != 0;
     }
@@ -172,7 +174,7 @@ namespace sciforge::binding {
     Py_ssize_t  size = 0;
     const char* data = PyUnicode_AsUTF8AndSize(obj, &size);
     if (data == nullptr) {
-      throw cast_error("invalid str");
+      throw error_already_set {}; // a lone surrogate: Python's UnicodeEncodeError stands
     }
     return {data, static_cast<std::size_t>(size)};
   }
@@ -261,15 +263,19 @@ namespace sciforge::binding {
     {
       PyObject* list = PyList_New(static_cast<Py_ssize_t>(items.size()));
       if (list == nullptr) {
-        throw cast_error("could not allocate list");
+        throw error_already_set {};
       }
-      for (std::size_t i = 0; i < items.size(); ++i) {
-        PyObject* element = caster<T>::to_python(items[i]);
-        if (element == nullptr) {
-          Py_DECREF(list);
-          throw cast_error("could not convert list element");
+      try {
+        for (std::size_t i = 0; i < items.size(); ++i) {
+          PyObject* element = caster<T>::to_python(items[i]);
+          if (element == nullptr) {
+            throw error_already_set {};
+          }
+          PyList_SetItem(list, static_cast<Py_ssize_t>(i), element); // steals element
         }
-        PyList_SetItem(list, static_cast<Py_ssize_t>(i), element);     // steals element
+      } catch (...) {
+        Py_DECREF(list); // the items set so far go with it; an inner list that threw released its own
+        throw;
       }
       return list;
     }
@@ -287,9 +293,14 @@ namespace sciforge::binding {
     {
       PyObject* tuple = PyTuple_New(static_cast<Py_ssize_t>(sizeof...(Ts)));
       if (tuple == nullptr) {
-        throw cast_error("could not allocate tuple");
+        throw error_already_set {};
       }
-      set_all(tuple, values, std::index_sequence_for<Ts...> {}); // moves each element out of the local copy
+      try {
+        set_all(tuple, values, std::index_sequence_for<Ts...> {}); // moves each element out of the local copy
+      } catch (...) {
+        Py_DECREF(tuple);                                          // drops the already-set items too; unset slots are null
+        throw;
+      }
       return tuple;
     }
 
@@ -309,8 +320,7 @@ namespace sciforge::binding {
     {
       PyObject* element = caster<std::decay_t<U>>::to_python(std::forward<U>(value));
       if (element == nullptr) {
-        Py_DECREF(tuple);                 // drops the already-set items too; unset slots are null
-        throw cast_error("could not convert tuple element");
+        throw error_already_set {};
       }
       PyTuple_SetItem(tuple, static_cast<Py_ssize_t>(I), element);     // steals element
     }

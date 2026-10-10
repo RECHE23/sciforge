@@ -18,17 +18,28 @@
 
 namespace sciforge::binding {
 
+  // Thrown where a Python call has just failed with its own error set (an unencodable str, a
+  // __bool__ that raised, a failed allocation): the translation leaves that error as it is.
+  struct error_already_set : std::exception {
+    [[nodiscard]] const char* what() const noexcept override
+    {
+      return "a Python error is already set";
+    }
+  };
+
   // Translate the in-flight C++ exception into a Python error and return nullptr, so a
   // binding entry point can write
   //   try { ... } catch (...) { return set_cpp_error(module_error_type); }
   // The argument is the module's error TYPE (catch (...) binds no exception object — the
   // in-flight exception is re-examined here via a bare `throw;`). Branch order matters:
-  // bad_alloc maps to MemoryError, every other std::exception to `error_type` with
+  // error_already_set keeps the Python error, bad_alloc maps to MemoryError, every other std::exception to `error_type` with
   // .what(), and anything else to a generic "internal error".
   inline PyObject* set_cpp_error(PyObject* error_type)
   {
     try {
       throw;
+    } catch (const error_already_set&) {
+      return nullptr;
     } catch (const std::bad_alloc&) {
       return PyErr_NoMemory();
     } catch (const std::exception& ex) {

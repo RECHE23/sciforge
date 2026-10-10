@@ -306,5 +306,55 @@ class UnsignedTest(unittest.TestCase):
                 bindingdemo.echo_u64(n)
 
 
+class PythonErrorTest(unittest.TestCase):
+    """A conversion that fails inside Python keeps Python's own error, and a container built halfway is
+    released, not leaked."""
+
+    def test_a_str_out_that_is_not_utf8_raises_its_decode_error(self):
+        with self.assertRaises(UnicodeDecodeError):
+            bindingdemo.nested_bad()
+        with self.assertRaises(UnicodeDecodeError):
+            bindingdemo.tuple_bad()
+
+    def test_a_container_built_halfway_is_released(self):
+        import gc
+        import tracemalloc
+        for call in (bindingdemo.nested_bad, bindingdemo.tuple_bad):
+            gc.collect()
+            tracemalloc.start()
+            for _ in range(200):
+                try:
+                    call()
+                except UnicodeDecodeError:
+                    pass
+            gc.collect()
+            before = tracemalloc.get_traced_memory()[0]
+            for _ in range(2000):
+                try:
+                    call()
+                except UnicodeDecodeError:
+                    pass
+            gc.collect()
+            grown = tracemalloc.get_traced_memory()[0] - before
+            tracemalloc.stop()
+            self.assertLess(grown, 20000, call.__name__)  # a list leaked per call comes to ~200 kB over 2000
+
+    def test_a_lone_surrogate_in_raises_its_encode_error(self):
+        with self.assertRaises(UnicodeEncodeError):
+            bindingdemo.echo("a\ud800b")
+
+    def test_a_raising_bool_keeps_its_own_error(self):
+        class Boom(Exception):
+            pass
+
+        class Truthy:
+            def __bool__(self):
+                raise Boom()
+
+        with self.assertRaises(Boom):
+            bindingdemo.negate(Truthy())
+        self.assertFalse(bindingdemo.negate(True))
+
+
 if __name__ == "__main__":
     unittest.main()
