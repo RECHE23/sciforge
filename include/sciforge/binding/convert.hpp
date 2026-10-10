@@ -101,21 +101,45 @@ namespace sciforge::binding {
       if (PyLong_Check(obj) == 0) {
         throw cast_error("expected int, got " + py_type_name(obj));
       }
-      const long long wide = PyLong_AsLongLong(obj);
-      if (wide == -1 && PyErr_Occurred() != nullptr) {
-        PyErr_Clear();
-        throw cast_error("int out of range");
+      if constexpr (std::is_unsigned_v<T> && sizeof(T) >= sizeof(unsigned long long)) {
+        // Past long long's range: its max read as a long long is -1, which no value fits under.
+        const unsigned long long wide = PyLong_AsUnsignedLongLong(obj);
+        if (wide == std::numeric_limits<unsigned long long>::max() && PyErr_Occurred() != nullptr) {
+          PyErr_Clear();
+          throw cast_error("int out of range");
+        }
+        return static_cast<T>(wide);
       }
-      if (wide < static_cast<long long>(std::numeric_limits<T>::min()) ||
-          wide > static_cast<long long>(std::numeric_limits<T>::max())) {
-        throw cast_error("int out of range");
+      else {
+        const long long wide = PyLong_AsLongLong(obj);
+        if (wide == -1 && PyErr_Occurred() != nullptr) {
+          PyErr_Clear();
+          throw cast_error("int out of range");
+        }
+        bool fits {};
+        if constexpr (std::is_signed_v<T>) {
+          fits = wide >= static_cast<long long>(std::numeric_limits<T>::min())
+                 && wide <= static_cast<long long>(std::numeric_limits<T>::max());
+        }
+        else {
+          fits = wide >= 0
+                 && static_cast<unsigned long long>(wide) <= static_cast<unsigned long long>(std::numeric_limits<T>::max());
+        }
+        if (!fits) {
+          throw cast_error("int out of range");
+        }
+        return static_cast<T>(wide);
       }
-      return static_cast<T>(wide);
     }
 
     static PyObject* to_python(T value)
     {
-      return PyLong_FromLongLong(static_cast<long long>(value));
+      if constexpr (std::is_unsigned_v<T>) {
+        return PyLong_FromUnsignedLongLong(static_cast<unsigned long long>(value));
+      }
+      else {
+        return PyLong_FromLongLong(static_cast<long long>(value));
+      }
     }
   };
 

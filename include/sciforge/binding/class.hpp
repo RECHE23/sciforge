@@ -59,14 +59,6 @@ namespace sciforge::binding {
     return name;
   }
 
-  // Whether T's __init__ refuses an instance that already holds a value (set by init_once).
-  template <class T>
-  inline bool& class_init_once()
-  {
-    static bool once = false;
-    return once;
-  }
-
   template <class T>
   inline std::vector<PyMethodDef>& class_methods()
   {
@@ -87,8 +79,8 @@ namespace sciforge::binding {
   inline T& class_unwrap(PyObject* obj)
   {
     PyObject* type = class_type<T>();
-    if (type == nullptr || PyObject_IsInstance(obj, type) <= 0) {
-      PyErr_Clear();
+    // The object's real type, not its `__class__`: a stand-in that claims the class (a mock) holds no T.
+    if (type == nullptr || PyObject_TypeCheck(obj, reinterpret_cast<PyTypeObject*>(type)) == 0) {
       throw cast_error(std::string("expected a ") + class_name<T>());
     }
     T* held = reinterpret_cast<wrapper<T>*>(obj)->held;
@@ -279,8 +271,9 @@ namespace sciforge::binding {
   }  // namespace detail
 
   // tp_init for a constructible wrapped type: parse the keyword arguments (the N3a arg-syntax
-  // kw_spec), call the factory, and store its result as the held T — deleting any previous one
-  // so __init__ stays re-callable, unless the type is init_once.
+  // kw_spec), call the factory, and store its result as the held T. A second __init__ is refused:
+  // it would delete the held T under a method still running on it (`T& self` across a callback or a
+  // released GIL) and under any view of its data (an array interface, a buffer, a DLPack capsule).
   template <class T, PyObject* (*Getter)(), auto Factory>
   int class_init(PyObject* self,
                  PyObject* args,
@@ -288,7 +281,7 @@ namespace sciforge::binding {
   {
     using traits             = function_traits<decltype(Factory)>;
     constexpr std::size_t kN                     = traits::arity;
-    if (class_init_once<T>() && reinterpret_cast<wrapper<T>*>(self)->held != nullptr) {
+    if (reinterpret_cast<wrapper<T>*>(self)->held != nullptr) {
       PyErr_Format(PyExc_TypeError, "%s cannot be re-initialized", class_name<T>());
       return -1;
     }
@@ -308,14 +301,8 @@ namespace sciforge::binding {
       }
     }
     try {
-      T           value = detail::invoke_factory<Factory>(objs, std::make_index_sequence<kN> {});
-      // Build the new held BEFORE deleting the old one (strong guarantee): if the allocation
-      // throws on re-__init__, the existing held stays intact rather than dangling. At first
-      // __init__ held is null, so the delete is a no-op.
-      T*          fresh = new T(std::move(value));
-      wrapper<T>* w     = reinterpret_cast<wrapper<T>*>(self);
-      delete w->held;
-      w->held = fresh;
+      T value = detail::invoke_factory<Factory>(objs, std::make_index_sequence<kN> {});
+      reinterpret_cast<wrapper<T>*>(self)->held = new T(std::move(value));
       return 0;
     } catch (const cast_error& err) {
       PyErr_SetString(PyExc_TypeError, err.what());
@@ -431,12 +418,10 @@ namespace sciforge::binding {
       return *this;
     }
 
-    // Refuse __init__ on an instance that already holds a value. A re-initialization deletes the
-    // held T, so a type whose data other objects view in place (an array interface, a buffer, a
-    // DLPack capsule) opts in: those views would read freed memory.
+    // Every wrapped type now refuses a second __init__ (see class_init). Kept so a consumer that
+    // still asks for it compiles; it changes nothing.
     class_& init_once()
     {
-      class_init_once<T>() = true;
       return *this;
     }
 

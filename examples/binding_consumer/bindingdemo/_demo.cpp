@@ -9,6 +9,8 @@
 #include <sciforge/binding/gil.hpp>
 #include <sciforge/binding/module.hpp>
 
+#include <cstdint>
+#include <limits>
 #include <new>
 #include <optional>
 #include <stdexcept>
@@ -261,6 +263,17 @@ namespace {
     return 2 * (g.w + g.h);
   }
 
+  // Unsigned 64-bit, past long long's range both ways.
+  std::uint64_t echo_u64(std::uint64_t n)
+  {
+    return n;
+  }
+
+  std::uint64_t u64_max()
+  {
+    return std::numeric_limits<std::uint64_t>::max();
+  }
+
   PyObject*   widget_describe(PyObject* self,   // a .raw method (the escape hatch)
                               PyObject* /*args*/)
   {
@@ -284,7 +297,7 @@ namespace {
     return Vec {x, scale.value_or(1), label};
   }
 
-  // Vec again, registered init_once: a second __init__ is refused.
+  // Vec again, registered init_once (now every type's behaviour): a second __init__ is refused.
   struct FixedVec : Vec {};
 
   FixedVec    make_fixed_vec(long long x)
@@ -374,6 +387,8 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.type<Widget>("bindingdemo.Widget").def<&area>("area_again");
   m.def<&make_widget>("make_widget", "w, h -> Widget");
   m.def<&widget_perimeter>("widget_perimeter", "Widget -> 2*(w+h)");
+  m.def<&echo_u64>("echo_u64", "n (unsigned 64-bit) -> n");
+  m.def<&u64_max>("u64_max", "-> 2**64 - 1");
   // N3b — a Python-constructible type (.def_init with optional/keyword args).
   m.type<Vec>("bindingdemo.Vec")
   .def_init<&make_vec>(sb::arg("x"), sb::arg("scale") = sb::none, sb::arg("label") = "v")

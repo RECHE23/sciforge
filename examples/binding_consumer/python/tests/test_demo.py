@@ -236,6 +236,14 @@ class WidgetTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             bindingdemo.Widget()
 
+    def test_a_stand_in_that_claims_the_class_is_refused(self):  # __class__ lies; the real type does not
+        from unittest import mock
+        stand_in = mock.MagicMock(spec=bindingdemo.Widget)
+        self.assertIsInstance(stand_in, bindingdemo.Widget)
+        with self.assertRaises(TypeError):
+            bindingdemo.widget_perimeter(stand_in)
+
+
     def test_double_register_is_inert_and_safe(self):  # B1: re-register guard
         # The module registers Widget twice; the second registration must be inert (no new
         # method) and must not realloc/dangle the live table — so the type still works.
@@ -271,10 +279,12 @@ class DefInitTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             bindingdemo.Vec()
 
-    def test_reinit_is_tolerated(self):              # __init__ re-callable (held deleted first)
+    def test_reinit_is_refused(self):                # a method may still hold the first value
         v = bindingdemo.Vec(3, 5)
-        v.__init__(2, 4)
-        self.assertEqual(v.total(), 8)
+        with self.assertRaises(TypeError) as caught:
+            v.__init__(2, 4)
+        self.assertIn("cannot be re-initialized", str(caught.exception))
+        self.assertEqual(v.total(), 15)
 
     def test_reinit_is_refused_when_init_once(self):  # a viewed type keeps its first value
         v = bindingdemo.FixedVec(3)
@@ -282,6 +292,18 @@ class DefInitTest(unittest.TestCase):
             v.__init__(4)
         self.assertIn("cannot be re-initialized", str(caught.exception))
         self.assertEqual(v.x(), 3)
+
+
+class UnsignedTest(unittest.TestCase):
+    def test_unsigned_64_bit_round_trips(self):
+        for n in (0, 5, 2**63, 2**64 - 1):
+            self.assertEqual(bindingdemo.echo_u64(n), n)
+        self.assertEqual(bindingdemo.u64_max(), 2**64 - 1)
+
+    def test_unsigned_64_bit_out_of_range_is_refused(self):
+        for n in (-1, 2**64):
+            with self.assertRaises(TypeError):
+                bindingdemo.echo_u64(n)
 
 
 if __name__ == "__main__":
