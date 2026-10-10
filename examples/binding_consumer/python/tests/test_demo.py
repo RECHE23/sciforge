@@ -93,6 +93,26 @@ class PassThroughTest(unittest.TestCase):
         self.assertEqual(sys.getrefcount(obj), before)
 
 
+    def test_a_returned_new_reference_is_not_leaked(self):
+        import gc
+        import tracemalloc
+        gc.collect()
+        tracemalloc.start()
+        for _ in range(200):
+            bindingdemo.fresh_list()
+        before = tracemalloc.get_traced_memory()[0]
+        for _ in range(5000):
+            bindingdemo.fresh_list()
+        grown = tracemalloc.get_traced_memory()[0] - before
+        tracemalloc.stop()
+        self.assertLess(grown, 20000)  # a list leaked per call comes to ~300 kB over 5000
+
+    def test_a_null_return_keeps_the_error_set(self):
+        with self.assertRaises(ValueError) as caught:
+            bindingdemo.value_error()
+        self.assertIn("set by the function", str(caught.exception))
+
+
 class CapsuleTest(unittest.TestCase):
     def test_capsule_caster_roundtrip(self):
         capsule = bindingdemo.make_handle(7)

@@ -133,8 +133,19 @@ namespace {
 
   PyObject* identity(PyObject* o)
   {
-    return o;
-  }                                            // pass-through (refcount test)
+    return Py_NewRef(o);
+  }                                            // pass-through: a PyObject* return is a new reference
+
+  PyObject* fresh_list()
+  {
+    return PyList_New(0);
+  }                                            // a new reference handed over, not leaked
+
+  PyObject* value_error()
+  {
+    PyErr_SetString(PyExc_ValueError, "set by the function");
+    return nullptr;
+  }                                            // nullptr: the error the function set stands
 
   void      noop()
   {
@@ -375,6 +386,8 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.def<&blen>("blen", "b -> len(b)");
   m.def<&upto>("upto", "n -> [0, n)");
   m.def<&identity>("identity", "o -> o (pass-through)");
+  m.def<&fresh_list>("fresh_list", "-> []");
+  m.def<&value_error>("value_error", "-> raises ValueError");
   m.def<&noop>("noop", "-> None");
   m.def<&boom>("boom", "throw -> module error");
   m.def<&handle_value>("handle_value", "capsule -> value");

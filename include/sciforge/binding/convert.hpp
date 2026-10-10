@@ -60,7 +60,8 @@ namespace sciforge::binding {
   struct caster;
 
   // PyObject* — pass-through. Borrowed in (the dispatch hands the borrowed tuple item
-  // straight through); new ref out (the caller is handing ownership to Python).
+  // straight through). Out, CPython's convention: a function returning PyObject* hands over a NEW
+  // reference (Py_NewRef what it got as an argument), and nullptr means it set a Python error.
   template <>
   struct caster<PyObject*> {
     static PyObject* from_python(PyObject* obj)
@@ -70,8 +71,11 @@ namespace sciforge::binding {
 
     static PyObject* to_python(PyObject* obj)
     {
-      return Py_NewRef(obj);
-    }                                                                        // new ref
+      if (obj == nullptr) {
+        throw error_already_set {};
+      }
+      return obj;                                                            // the function's new ref
+    }
   };
 
   // bool — truthiness in (matches the 'p' format), True/False out.
