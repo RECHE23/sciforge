@@ -440,14 +440,16 @@ namespace sciforge::binding {
       if (class_type<T>() != nullptr) {
         return *this; // inert on a re-import: keep the existing factory's kw_spec untouched
       }
+      static_assert(required_before_optional<Spec0, Specs...>(),
+                    "a required arg() cannot follow one with a default (an absent one would have no value)");
       kw_spec& spec = kw_spec_for<Factory>();
-      for (PyObject* owned : spec.defaults) {
-        Py_XDECREF(owned); // release the previous defaults on a re-import; nullptr is a no-op
+      if (claim_kw_spec(spec, class_name<T>())) {
+        add_arg(spec, spec0);
+        (add_arg(spec, specs), ...);
+        spec.kwlist.push_back(nullptr);
+        spec.format += ':';
+        spec.format += class_name<T>();
       }
-      spec = kw_spec {};
-      add_arg(spec, spec0);
-      (add_arg(spec, specs), ...);
-      spec.kwlist.push_back(nullptr);
       init_ = class_init<T, Getter, Factory>;
       return *this;
     }

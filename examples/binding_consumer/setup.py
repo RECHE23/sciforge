@@ -18,6 +18,15 @@ setup(
             py_limited_api=True,
             extra_compile_args=_std,
             language="c++",
-        )
+        ),
+        Extension(
+            "bindingdemo._conflict",
+            sources=["bindingdemo/_conflict.cpp"],
+            include_dirs=[sciforge_build.get_include()],
+            define_macros=[("Py_LIMITED_API", "0x030A0000")],
+            py_limited_api=True,
+            extra_compile_args=_std,
+            language="c++",
+        ),
     ],
 )

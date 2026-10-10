@@ -105,8 +105,9 @@ namespace sciforge::binding {
           sciforge_module_table.clear();  /* a sub-interpreter re-import re-registers; start fresh */ \
           ::sciforge::binding::module_builder<&sciforge_module_error> m(sciforge_module_table,    \
                                                                         module);                  \
+          ++::sciforge::binding::registration_epoch();                                            \
           sciforge_module_register(m);                                                            \
-          if (PyErr_Occurred() != nullptr) { /* a default failed to allocate during registration */ \
+          if (PyErr_Occurred() != nullptr) { /* a default failed to allocate, or a spec registered twice */ \
             Py_DECREF(module);                                                                  \
             return nullptr;                                                                     \
           }                                                                                       \

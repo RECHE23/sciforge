@@ -356,5 +356,17 @@ class PythonErrorTest(unittest.TestCase):
         self.assertFalse(bindingdemo.negate(True))
 
 
+class KeywordSpecTest(unittest.TestCase):
+    def test_a_missing_argument_names_the_function(self):
+        with self.assertRaises(TypeError) as caught:
+            bindingdemo.greater()
+        self.assertIn("greater", str(caught.exception))
+
+    def test_a_function_registered_twice_with_keywords_fails_the_import(self):
+        with self.assertRaises(SystemError) as caught:
+            import bindingdemo._conflict  # noqa: F401
+        self.assertIn("add2", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

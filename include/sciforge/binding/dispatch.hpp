@@ -149,13 +149,15 @@ namespace sciforge::binding {
     }
   }
 
-  // Per-function keyword spec: kwlist (names + NULL), the all-'O' format, and the
-  // resolved defaults (nullptr for a required parameter). One static per Func.
+  // Per-function keyword spec: kwlist (names + NULL), the all-'O' format (ending in `:name`, so
+  // PyArg's messages name the function), and the resolved defaults (nullptr for a required
+  // parameter). One static per Func, filled once per module import (`epoch`).
   struct kw_spec {
     std::vector<char*>     kwlist;
     std::string            format;
     std::vector<PyObject*> defaults;
     bool                   optional_started = false;
+    std::size_t            epoch            = 0;
   };
 
   template <auto Func>
@@ -163,6 +165,51 @@ namespace sciforge::binding {
   {
     static kw_spec spec;
     return spec;
+  }
+
+  // Counts module imports (SCIFORGE_MODULE bumps it), so a spec filled twice within one import is
+  // told apart from one a re-import fills again.
+  inline std::size_t& registration_epoch()
+  {
+    static std::size_t epoch = 0;
+    return epoch;
+  }
+
+  // Empties \p spec for a new registration of \p name. A function holds one keyword spec, keyed by
+  // the function itself, so a second registration within one import would rewrite the first's
+  // names and defaults: refused with SystemError (the module import then fails).
+  inline bool claim_kw_spec(kw_spec&    spec,
+                            const char* name)
+  {
+    if (spec.epoch != 0 && spec.epoch == registration_epoch()) {
+      PyErr_Format(PyExc_SystemError,
+                   "%s: a function registered with keyword arguments takes one registration per module", name);
+      return false;
+    }
+    for (PyObject* owned : spec.defaults) {
+      Py_XDECREF(owned); // release the previous defaults (a re-import re-registers); nullptr is a no-op
+    }
+    spec       = kw_spec {};
+    spec.epoch = registration_epoch();
+    return true;
+  }
+
+  // Whether the arg() specs put every required parameter before the optional ones (PyArg's '|').
+  template <class Spec>
+  inline constexpr bool is_defaulted_spec = !std::is_same_v<Spec, arg>;
+
+  template <class ... Specs>
+  inline constexpr bool required_before_optional()
+  {
+    constexpr bool defaulted[]   {is_defaulted_spec<Specs>...};
+    bool           seen_optional {false};
+    for (const bool d : defaulted) {
+      if (!d && seen_optional) {
+        return false;
+      }
+      seen_optional = seen_optional || d;
+    }
+    return true;
   }
 
   inline void add_arg(kw_spec&   spec,
@@ -259,14 +306,16 @@ namespace sciforge::binding {
     // of bounds and the all-'O' format disagrees with parse_kw's pointer count (UB).
     static_assert(1 + sizeof...(Specs) == function_traits<decltype(Func)>::arity,
                   "the number of arg() specifications must match the function's parameter count");
+    static_assert(required_before_optional<Spec0, Specs...>(),
+                  "a required arg() cannot follow one with a default (an absent one would have no value)");
     kw_spec& spec = kw_spec_for<Func>();
-    for (PyObject* owned : spec.defaults) {
-      Py_XDECREF(owned); // release the previous defaults (a re-import re-registers); nullptr is a no-op
+    if (claim_kw_spec(spec, name)) {
+      add_arg(spec, spec0);
+      (add_arg(spec, specs), ...);
+      spec.kwlist.push_back(nullptr); // NULL-terminate the kwlist
+      spec.format += ':';
+      spec.format += name;
     }
-    spec = kw_spec {};
-    add_arg(spec, spec0);
-    (add_arg(spec, specs), ...);
-    spec.kwlist.push_back(nullptr); // NULL-terminate the kwlist
     // The two-step cast (-> void(*)() -> PyCFunction) is the standard CPython idiom for storing
     // a METH_KEYWORDS function (signature self,args,kwargs) in a PyCFunction slot: a direct cast
     // between unrelated function-pointer types is ill-formed, so we route through void(*)() (as
