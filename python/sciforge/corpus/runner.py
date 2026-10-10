@@ -72,6 +72,15 @@ def _divergence_link(case):
     return None
 
 
+def _observe(driver, case, api):
+    """What `driver` gives for `case`, or the name of the exception it raised: one case that crashes a
+    driver is that case's observable, compared and classified like any other, not the end of the run."""
+    try:
+        return driver(case.pattern, case.input, api, case.flags)
+    except Exception as error:  # noqa: BLE001 -- any failure of the driver is this case's outcome
+        return {"exception": type(error).__name__}
+
+
 def run_corpus(cases, manifest, *, engine, oracle, divergence_of=None):
     """Run every case and return a :class:`CorpusReport`.
 
@@ -84,24 +93,30 @@ def run_corpus(cases, manifest, *, engine, oracle, divergence_of=None):
         divergence_of: an optional ``(real_result, oracle_result, case) -> link | None`` callback that
             recognises a *documented* divergence class and returns its divergences.dox link, so those
             cases classify as ``intentional_divergence`` instead of ``bug``. A per-case ``status_expected``
-            override takes precedence over it.
+            override takes precedence over it; one with another status is that case's status.
+
+    A driver that raises on a case gives ``{"exception": <its type name>}`` for it, and the run goes on.
 
     Returns:
         CorpusReport
     """
     results = []
     for case in cases:
-        real_result = engine(case.pattern, case.input, manifest.api, case.flags)
+        real_result = _observe(engine, case, manifest.api)
         if manifest.oracle == "real_only":
             oracle_result = case.expected
         else:
-            oracle_result = oracle(case.pattern, case.input, manifest.api, case.flags)
-        link = _divergence_link(case)
-        if link is None and divergence_of is not None:
-            link = divergence_of(real_result, oracle_result, case)
-        status = classify(real_result, oracle_result, case.expected,
-                          semantics=manifest.semantics, oracle=manifest.oracle,
-                          requires=case.requires, divergence_link=link)
+            oracle_result = _observe(oracle, case, manifest.api)
+        override = case.status_expected
+        if override and override.get("status") != INTENTIONAL_DIVERGENCE:
+            status = override["status"]  # validated: a status of the taxonomy, with its reason
+        else:
+            link = _divergence_link(case)
+            if link is None and divergence_of is not None:
+                link = divergence_of(real_result, oracle_result, case)
+            status = classify(real_result, oracle_result, case.expected,
+                              semantics=manifest.semantics, oracle=manifest.oracle,
+                              requires=case.requires, divergence_link=link)
         results.append(CaseResult(status=status, pattern=case.pattern,
                                   real_result=real_result, oracle_result=oracle_result))
     return CorpusReport(corpus=manifest.origin, manifest=manifest, results=results)
@@ -135,13 +150,33 @@ def load_cases_toml(path):
     return manifest, cases
 
 
-def _rust_match(match):
-    """Normalise a rust-regex match entry — ``[s, e]`` (group 0) or ``[[s0,e0], [s1,e1], …]``."""
-    if match and isinstance(match[0], int):
-        return {"span": list(match), "groups": []}
-    span = list(match[0]) if match[0] is not None else [-1, -1]
-    groups = [([-1, -1] if g is None else list(g)) for g in match[1:]]
-    return {"span": span, "groups": groups}
+def _char_offsets(text):
+    """Map each UTF-8 byte offset of `text` that starts a code point (and the end) to its index in the
+    ``str``; an offset inside a code point is absent."""
+    offsets, byte = {}, 0
+    for index, char in enumerate(text):
+        offsets[byte] = index
+        byte += len(char.encode("utf-8"))
+    offsets[byte] = len(text)
+    return offsets
+
+
+def _rust_match(match, offsets):
+    """Normalise a rust-regex match entry — ``[s, e]`` (group 0) or ``[[s0,e0], [s1,e1], …]`` — its byte
+    offsets read as indices into the ``str`` haystack through `offsets` (rust reports bytes, a ``str``
+    match characters). ``None`` when a span starts or ends inside a code point."""
+    def span(pair):
+        if pair is None:
+            return [-1, -1]
+        if not pair:
+            return []  # TOML has no null: rust writes a group that did not take part as []
+        start, end = (offsets.get(pair[0]), offsets.get(pair[1]))
+        return None if start is None or end is None else [start, end]
+    pairs = [match] if match and isinstance(match[0], int) else list(match)
+    spans = [span(pair) for pair in pairs]
+    if any(s is None for s in spans):
+        return None
+    return {"span": spans[0], "groups": spans[1:]}
 
 
 def load_cases_rust_toml(path):
@@ -149,8 +184,9 @@ def load_cases_rust_toml(path):
     field is every non-overlapping match).
 
     Returns ``(cases, filtered)``: `filtered` counts the ``[[test]]`` entries skipped as **out of the
-    API we offer** (``anchored`` / ``bounds`` / ``match-limit`` / non-UTF-8), which is import-time
-    filtering, distinct from any runtime status. ``unicode = false`` maps to the ``ascii`` flag and
+    API we offer** (``anchored`` / ``bounds`` / ``match-limit`` / non-UTF-8, a match splitting a code
+    point), which is import-time filtering, distinct from any runtime status. Rust's byte offsets are
+    read as indices into the ``str`` haystack, as a ``str`` engine reports them. ``unicode = false`` maps to the ``ascii`` flag and
     ``case-insensitive`` to ``icase``.
     """
     with open(path, "rb") as handle:
@@ -173,7 +209,11 @@ def load_cases_rust_toml(path):
             flags.append("ascii")
         if entry.get("case-insensitive"):
             flags.append("icase")
-        expected = [_rust_match(match) for match in entry.get("matches", [])]
+        offsets = _char_offsets(entry["haystack"])
+        expected = [_rust_match(match, offsets) for match in entry.get("matches", [])]
+        if any(match is None for match in expected):
+            filtered += 1  # a match that splits a code point has no str form
+            continue
         cases.append(Case(pattern=entry["regex"], input=entry["haystack"],
                           expected=expected, flags=flags))
     return cases, filtered

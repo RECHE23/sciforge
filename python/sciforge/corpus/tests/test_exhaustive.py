@@ -8,6 +8,7 @@ reports compare equal). Pattern counts at small k are pinned as regression ancho
 import unittest
 
 from sciforge.corpus.exhaustive import (
+    as_cases,
     count_inputs,
     enumerate_inputs,
     enumerate_patterns,
@@ -61,6 +62,13 @@ class TestDeterminism(unittest.TestCase):
         npat = len(enumerate_patterns(2))
         ninp = len(enumerate_inputs(3))
         self.assertEqual(sum(1 for _ in enumerate_cases(2, 3)), npat * ninp)
+
+    def test_tier2_reaches_the_cases(self):
+        # The tier reaches the case generators: enumerate_patterns alone took it.
+        tier2 = {pattern for pattern, _ in enumerate_cases(2, 0, tier=2)}
+        self.assertIn("a|", tier2)
+        self.assertNotIn("a|", {pattern for pattern, _ in enumerate_cases(2, 0)})
+        self.assertIn("|a", {case.pattern for case in as_cases(2, 0, tier=2)})
 
 
 if __name__ == "__main__":

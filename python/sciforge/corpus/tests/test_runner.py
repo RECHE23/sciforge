@@ -84,6 +84,29 @@ class TestFiveStatusSelfTest(unittest.TestCase):
         self.assertEqual(report.counts()[BUG], 1)
 
 
+class TestRunnerKeepsGoing(unittest.TestCase):
+    def test_an_override_with_another_status_is_that_status(self):
+        # Excluded by design with its reason: engine and oracle differ, and the case is not a bug.
+        cases = [Case(pattern="lookbehind", input="x",
+                      status_expected={"status": EXCLUDED_BY_DESIGN, "reason": "unbounded lookbehind"})]
+        report = run_corpus(cases, _manifest(), engine=_stub({"lookbehind": "error"}),
+                            oracle=_stub({"lookbehind": {"span": [0, 1], "groups": []}}))
+        self.assertEqual(report.results[0].status, EXCLUDED_BY_DESIGN)
+
+    def test_a_driver_that_raises_is_that_case_s_outcome(self):
+        # One case crashes the engine: it is a bug with the exception as its observable, and the next
+        # case still runs.
+        def engine(pattern, text, api, flags):
+            if pattern == "crash":
+                raise RuntimeError("boom")
+            return None
+
+        cases = [Case(pattern="crash", input="x"), Case(pattern="fine", input="x")]
+        report = run_corpus(cases, _manifest(), engine=engine, oracle=lambda *_: None)
+        self.assertEqual([result.status for result in report.results], [BUG, PASS])
+        self.assertEqual(report.results[0].real_result, {"exception": "RuntimeError"})
+
+
 class TestLoaders(unittest.TestCase):
     def test_toml_round_trip(self):
         doc = (
@@ -173,6 +196,24 @@ class TestLoaders(unittest.TestCase):
             self.assertEqual(cases[0].expected, [{"span": [0, 2], "groups": [[1, 2]]}])
             self.assertEqual(cases[1].expected,
                              [{"span": [0, 1], "groups": []}, {"span": [1, 2], "groups": []}])
+        finally:
+            os.unlink(path)
+
+    def test_rust_byte_offsets_become_character_indices(self):
+        # Rust reports byte offsets; a str engine reports characters. é is two bytes: the `a` after it
+        # is bytes [2, 3] and characters [1, 2]. A match that ends inside é has no str form.
+        doc = "\n".join([
+            '[[test]]', 'name = "after"', "regex = 'a'", 'haystack = "éa"', 'matches = [[2, 3]]',
+            '',
+            '[[test]]', 'name = "split"', "regex = '.'", 'haystack = "é"', 'matches = [[0, 1]]',
+        ])
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False, encoding="utf-8") as handle:
+            handle.write(doc)
+            path = handle.name
+        try:
+            cases, filtered = load_cases_rust_toml(path)
+            self.assertEqual(filtered, 1)
+            self.assertEqual(cases[0].expected, [{"span": [1, 2], "groups": []}])
         finally:
             os.unlink(path)
 

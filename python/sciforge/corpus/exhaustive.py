@@ -118,16 +118,16 @@ def count_inputs(n, alphabet="ab", extra="c"):
     return base if not extra else base * 2  # each base string, plus itself + extra
 
 
-def enumerate_cases(k, n, alphabet="ab", extra="c"):
-    """Yield (pattern, input) for the full cross product — the exhaustive case space."""
-    patterns = enumerate_patterns(k, alphabet)
+def enumerate_cases(k, n, alphabet="ab", extra="c", tier=1):
+    """Yield (pattern, input) for the full cross product — the exhaustive case space at `tier`."""
+    patterns = enumerate_patterns(k, alphabet, tier)
     inputs = enumerate_inputs(n, alphabet, extra)
     for pattern in patterns:
         for text in inputs:
             yield pattern, text
 
 
-def as_cases(k, n, alphabet="ab", extra="c"):
+def as_cases(k, n, alphabet="ab", extra="c", tier=1):
     """Yield :class:`sciforge.corpus.Case` records for the space, ready for :func:`run_corpus`.
 
     Each case has no stored ``expected`` — the exhaustive mode judges the engine against a *freshly run*
@@ -135,5 +135,5 @@ def as_cases(k, n, alphabet="ab", extra="c"):
     and every divergence is a genuine engine-vs-oracle difference passed to ``classify``.
     """
     from .schema import Case  # local import keeps the enumerator itself dependency-light
-    for pattern, text in enumerate_cases(k, n, alphabet, extra):
+    for pattern, text in enumerate_cases(k, n, alphabet, extra, tier):
         yield Case(pattern=pattern, input=text)

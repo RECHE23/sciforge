@@ -174,8 +174,11 @@ def classify(real_result,
             and corpus_expected is not None
             and not expectation_holds(corpus_expected, oracle_result)):
         return OUT_OF_CONTRACT
-    # 3. The engine agrees with the authority.
-    if real_result == oracle_result:
+    # 3. The engine agrees with the authority. Under real_only the authority is the stored expectation,
+    #    which binds only what it states (a Fowler outcome may list fewer groups than the pattern has).
+    agrees = (expectation_holds(oracle_result, real_result) if oracle == "real_only"
+              else real_result == oracle_result)
+    if agrees:
         return PASS
     # 4. The disagreement is documented and on purpose.
     if divergence_link:

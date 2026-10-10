@@ -113,6 +113,15 @@ class TestTrapCases(unittest.TestCase):
         self.assertEqual(classify(real_result=[oracle], oracle_result=[oracle], corpus_expected=[stated],
                                   semantics="posix", oracle="python_re"), PASS)
 
+    def test_real_only_binds_only_what_the_expectation_states(self):
+        # Under real_only the stored expectation is the authority; a Fowler outcome listing one group of
+        # two holds for real's two, and a stated group real misses is a bug.
+        stated = {"span": [0, 2], "groups": [[0, 1]]}
+        self.assertEqual(classify(real_result={"span": [0, 2], "groups": [[0, 1], [1, 2]]}, oracle_result=stated,
+                                  corpus_expected=stated, semantics="leftmost-first", oracle="real_only"), PASS)
+        self.assertEqual(classify(real_result={"span": [0, 2], "groups": [[1, 2], [1, 2]]}, oracle_result=stated,
+                                  corpus_expected=stated, semantics="leftmost-first", oracle="real_only"), BUG)
+
     def test_real_only_corpus_never_out_of_contract(self):
         # real_only: the corpus IS real's pinned behaviour, so semantics match by definition.
         self.assertEqual(
