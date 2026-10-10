@@ -57,7 +57,7 @@ class ComparatorTest(unittest.TestCase):
         case = compare("ok", lambda: 1, lambda: 1, lambda a, b: a == b, samples=4)
         result = verdict([case])
         self.assertTrue(result.passed)
-        self.assertIn(result.classification, {"faster", "slower", "indecisive"})
+        self.assertIn(result.classification, {"equivalent", "faster", "slower", "indecisive"})
 
 
 class MismatchTest(unittest.TestCase):
@@ -115,6 +115,17 @@ class VerdictTest(unittest.TestCase):
         result = verdict(cases)
         self.assertEqual(result.classification, "faster")
 
+    def test_equivalent_when_the_ci_lies_inside_the_margin(self):
+        # A 0.5 % difference with a tight CI clears 1.0, which alone would read as a win.
+        close = [_case("a", [1.005, 1.004, 1.006] * 2), _case("b", [1.003, 1.005, 1.004] * 2)]
+        result = verdict(close, subject_label="X")
+        self.assertEqual(result.classification, "equivalent")
+        self.assertIn("X equivalent", result.text)
+        self.assertEqual(verdict(close, margin=0).classification, "faster")
+        # Just past the margin, the call is a speed call again.
+        self.assertEqual(verdict([_case("c", [1.05] * 6)]).classification, "faster")
+        self.assertEqual(verdict([_case("d", [0.95] * 6)]).classification, "slower")
+
     def test_no_comparable_cases(self):
         result = verdict([_case("bad", [], mismatch=True)])
         self.assertEqual(result.classification, "no-data")
@@ -123,3 +134,30 @@ class VerdictTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OrderTest(unittest.TestCase):
+    def test_the_pair_alternates_which_runs_first(self):
+        # ABBA: subject first on even samples, reference first on odd ones. The timer is replaced by
+        # one that records the order, so the check counts the mechanism, not a clock.
+        import importlib
+        from unittest import mock
+
+        compare_module = importlib.import_module("sciforge.bench.compare") # the package re-exports the function
+
+        order = []
+
+        def subject():
+            return None
+
+        def reference():
+            return None
+
+        def fake_batch_time(fn, n):
+            order.append("S" if fn is subject else "R")
+            return 1.0
+
+        with mock.patch.object(compare_module, "batch_time", fake_batch_time), \
+                mock.patch.object(compare_module, "calibrate", lambda fn, target: 1):
+            compare_module.collect_pair(subject, reference, samples=4)
+        self.assertEqual(order, ["S", "R", "R", "S", "S", "R", "R", "S"])

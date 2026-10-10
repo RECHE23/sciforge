@@ -54,14 +54,21 @@ def bootstrap_ci(samples, stat, B=1000, level=0.95, rng=None):
         resample = [samples[rng.randrange(count)] for _ in range(count)]
         boots.append(stat(resample))
     boots.sort()
-    alpha = (1.0 - level) / 2.0
-    low = boots[_clamp(int(alpha * B), B)]
-    high = boots[_clamp(int(round((1.0 - alpha) * B)) - 1, B)]
+    low, high = _percentile_bounds(boots, level)
     return low, high
 
 
 def _clamp(index, size):
     return max(0, min(index, size - 1))
+
+
+def _percentile_bounds(ordered, level):
+    """The (lower, upper) percentile bounds of the sorted bootstrap values for `level`: as many
+    values below the lower as above the upper. Both indices are rounded, the lower one included:
+    truncated, (1 - 0.9) / 2 * 1000 = 49.99… took the 49th value below against 50 above."""
+    count = len(ordered)
+    tail = int(round((1.0 - level) / 2.0 * count))
+    return ordered[_clamp(tail, count)], ordered[_clamp(count - 1 - tail, count)]
 
 
 def ratio_ci(numerator, denominator, B=1000, level=0.95, rng=None):
@@ -81,9 +88,7 @@ def ratio_ci(numerator, denominator, B=1000, level=0.95, rng=None):
         den = statistics.median([denominator[rng.randrange(n_den)] for _ in range(n_den)])
         boots.append(num / den)
     boots.sort()
-    alpha = (1.0 - level) / 2.0
-    low = boots[_clamp(int(alpha * B), B)]
-    high = boots[_clamp(int(round((1.0 - alpha) * B)) - 1, B)]
+    low, high = _percentile_bounds(boots, level)
     return point, low, high
 
 
@@ -132,9 +137,7 @@ def hierarchical_geomean_ci(groups, B=1000, level=0.95, rng=None):
             medians.append(statistics.median([group[rng.randrange(len(group))] for _ in group]))
         boots.append(geomean_of(medians))
     boots.sort()
-    alpha = (1.0 - level) / 2.0
-    low = boots[_clamp(int(alpha * B), B)]
-    high = boots[_clamp(int(round((1.0 - alpha) * B)) - 1, B)]
+    low, high = _percentile_bounds(boots, level)
     return point, low, high
 
 

@@ -109,3 +109,15 @@ class EcdfTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PercentileBoundsTest(unittest.TestCase):
+    def test_the_bounds_leave_as_many_values_on_each_side(self):
+        from sciforge.bench.stats import _percentile_bounds
+
+        ordered = list(range(1000))
+        for level, low, high in ((0.95, 25, 974), (0.9, 50, 949), (0.8, 100, 899)):
+            with self.subTest(level=level):
+                self.assertEqual(_percentile_bounds(ordered, level), (low, high))
+                self.assertEqual(low, len(ordered) - 1 - high)
+
