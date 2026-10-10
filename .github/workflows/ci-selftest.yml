@@ -98,8 +98,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip build
           python -m build --outdir dist python/sciforge-build
-      - name: Build + test the binding fixture against sciforge-build (off-PyPI, --find-links)
+      # The wheel just built, by its path, and no build isolation: an isolated build resolves
+      # sciforge-build again and takes PyPI's copy of the same version, testing published headers.
+      - name: Build + test the binding fixture against this commit's sciforge-build
         shell: bash
         run: |
-          python -m pip install ./examples/binding_consumer --find-links dist
+          python -m pip install "setuptools>=68" wheel dist/sciforge_build-*.whl
+          python -c "import filecmp, sciforge_build, sys; d = filecmp.dircmp(sciforge_build.get_include() + '/sciforge/binding', 'include/sciforge/binding'); sys.exit(1 if d.left_only or d.right_only or d.diff_files else 0)"
+          python -m pip install --no-build-isolation ./examples/binding_consumer
           python -m unittest discover -s examples/binding_consumer/python/tests -v
