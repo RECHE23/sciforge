@@ -46,10 +46,35 @@ TEST(selftest_scenario)
   else if (std::strcmp(g_scenario, "mixed_sign_negative") == 0) {
     EXPECT_EQ(-1, std::numeric_limits<std::size_t>::max()); // equal only by wrapping: one failed check
   }
+  else if (std::strcmp(g_scenario, "cstring_equal") == 0) {
+    const char        first[]  {"same"};                    // two arrays, two addresses, one content
+    const char        second[] {"same"};
+    const char* const pointer  {second};
+    EXPECT_EQ(first, second);
+    EXPECT_EQ(pointer, "same");
+  }
+  else if (std::strcmp(g_scenario, "cstring_mismatch") == 0) {
+    const char* const null {nullptr};
+    EXPECT_EQ("abc", "abd");                                           // one content differs: one failed check
+    EXPECT_EQ(null, "a");                                              // a null against a text fails, and prints
+  }
+  else if (std::strcmp(g_scenario, "near") == 0) {
+    EXPECT_NEAR(1.0, 1.0 + 1e-12, 1e-9);                               // within: passes
+    EXPECT_NEAR(1.0, 1.1, 1e-3);                                       // beyond: one failed check
+    EXPECT_NEAR(std::numeric_limits<double>::quiet_NaN(), 1.0, 1e300); // a NaN never is near
+  }
   else if (std::strcmp(g_scenario, "counts") == 0) {
-    EXPECT(true);                                           // 2 passed,
+    EXPECT(true);                                                      // 2 passed,
     EXPECT(true);
-    EXPECT(false);                                          // 1 failed -> summary must read "2 checks passed | 1 checks failed"
+    EXPECT(false);                                                     // 1 failed -> summary must read "2 checks passed | 1 checks failed"
+  }
+}
+
+// Fails only under the filter scenarios, which must not run it.
+TEST(filtered_out)
+{
+  if (std::strncmp(g_scenario, "filter", 6) == 0) {
+    EXPECT(false);
   }
 }
 
@@ -61,6 +86,18 @@ int main(int    argc,
   }
   if (std::strcmp(g_scenario, "no_tests") == 0) {
     test::registry().clear();
+  }
+  if (std::strcmp(g_scenario, "filter") == 0) {
+    return test::run_all("selftest");                       // runs selftest_scenario only
+  }
+  if (std::strcmp(g_scenario, "filter_none") == 0) {
+    return test::run_all("no such test");
+  }
+  if (std::strcmp(g_scenario, "filter_argv") == 0) {
+    char  program[]   {"child"};
+    char  wanted[]    {"selftest"};
+    char* arguments[] {program, wanted};
+    return test::run_all(2, arguments);
   }
   return test::run_all();
 }

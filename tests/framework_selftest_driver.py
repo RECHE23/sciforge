@@ -22,6 +22,12 @@ SCENARIOS = {
     "mixed_sign_negative": (1, "1 checks failed"),
     "counts":             (1, "2 checks passed | 1 checks failed"),
     "no_tests":           (1, "FAILED (no test registered)"),
+    "cstring_equal":      (0, "2 checks passed | 0 checks failed"),
+    "cstring_mismatch":   (1, "0 checks passed | 2 checks failed"),
+    "near":               (1, "1 checks passed | 2 checks failed"),
+    "filter":             (0, "1 tests | 0 checks passed | 0 checks failed"),
+    "filter_argv":        (0, "1 tests | 0 checks passed | 0 checks failed"),
+    "filter_none":        (1, "FAILED (no test registered whose name holds no such test)"),
 }
 
 

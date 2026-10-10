@@ -2,16 +2,21 @@
  * \brief Minimal zero-dependency test framework used by the C++ test suite.
  *
  * Provides TEST() auto-registration, EXPECT* assertion macros, and a single
- * runner. Failures are reported but never abort the run, so one failing test
- * does not hide others.
+ * runner, which may run only the tests whose name holds a given text. Failures
+ * are reported but never abort the run, so one failing test does not hide others.
+ * A test passes when none of its checks fails and nothing escapes it; one with no
+ * check states that its body does not throw.
  */
 #ifndef SCIFORGE_TEST_FRAMEWORK_HPP
 #define SCIFORGE_TEST_FRAMEWORK_HPP
 
+#include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <exception>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -93,6 +98,13 @@ namespace test {
       report_failure(file, line, expr);
     }
 
+    /*!\brief A character pointer, or a character array: what `==` would compare by address.
+     * \tparam T The type to classify.
+     */
+    template <typename T>
+    concept c_string = std::is_pointer_v<std::decay_t<T>>
+                       && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
+
     /*!\brief Streams a value into an ostringstream when possible.
      * \tparam T     Value type.
      * \param[in,out] oss   Output stream.
@@ -102,7 +114,11 @@ namespace test {
     void print_value(std::ostringstream& oss,
                      const T&            value)
     {
-      if constexpr (requires { oss << value; }) {
+      if constexpr (c_string<T>) {
+        const char* const text {value};
+        oss << (text == nullptr ? "nullptr" : text); // streaming a null char* is undefined
+      }
+      else if constexpr (requires { oss << value; }) {
         oss << value;
       }
       else {
@@ -126,7 +142,9 @@ namespace test {
      *
      * Two integers compare by VALUE (`std::cmp_equal`), not through `==`'s usual arithmetic
      * conversions: `EXPECT_EQ(v.size(), 3)` compiles cleanly under `-Wsign-compare -Werror`, and `-1`
-     * never equals `SIZE_MAX` by wrapping. Everything else compares with `==`.
+     * never equals `SIZE_MAX` by wrapping. Two C strings compare by content, as `==` on their pointers
+     * would compare addresses (two equal literals may or may not share one); a null one equals only a
+     * null one. Everything else compares with `==`.
      * \tparam L     Type of the actual value.
      * \tparam R     Type of the expected value.
      * \param[in] actual   The value produced by the test.
@@ -146,6 +164,11 @@ namespace test {
       if constexpr (comparable_integer<L> && comparable_integer<R>) {
         equal = std::cmp_equal(actual, expected);
       }
+      else if constexpr (c_string<L> && c_string<R>) {
+        const char* const left  {actual};
+        const char* const right {expected};
+        equal = (left == nullptr || right == nullptr) ? left == right : std::strcmp(left, right) == 0;
+      }
       else {
         equal = (actual == expected);
       }
@@ -160,21 +183,48 @@ namespace test {
       print_value(oss, expected);
       report_failure(file, line, oss.str());
     }
+
+    /*!\brief Checks that two floating-point values differ by at most a tolerance (a NaN never does).
+     * \param[in] actual    The value produced by the test.
+     * \param[in] expected  The expected value.
+     * \param[in] tolerance The largest difference accepted.
+     * \param[in] file      Source file of the check.
+     * \param[in] line      Line number of the check.
+     * \param[in] expr      String representation of the comparison.
+     */
+    inline void check_near(double      actual,
+                           double      expected,
+                           double      tolerance,
+                           const char* file,
+                           int         line,
+                           const char* expr)
+    {
+      if (std::abs(actual - expected) <= tolerance) {
+        ++checks_passed;
+        return;
+      }
+      std::ostringstream oss;
+      oss.precision(17);
+      oss << expr << " — actual: " << actual << ", expected: " << expected << ", tolerance: " << tolerance;
+      report_failure(file, line, oss.str());
+    }
   } // namespace detail
 
   /*!
-   * \brief Runs all registered tests.
-   * \return 0 if all tests passed, 1 otherwise -- and 1 when none is registered, since a binary whose
-   *         test files were left out of the link has proved nothing.
+   * \brief Runs the registered tests whose name holds \p filter (all of them when it is empty).
+   * \param[in] filter Text a test's name must hold.
+   * \return 0 if every test run passed, 1 otherwise -- and 1 when none ran, since a binary whose test
+   *         files were left out of the link, or a filter that matches nothing, has proved nothing.
    */
-  inline int run_all()
+  inline int run_all(std::string_view filter)
   {
-    if (registry().empty()) {
-      std::printf("0 tests | 0 checks passed | 0 checks failed\nFAILED (no test registered)\n");
-      return 1;
-    }
-    int tests_failed = 0;
+    int         tests_failed {0};
+    std::size_t tests_run    {0};
     for (const auto& test_case : registry()) {
+      if (std::string_view {test_case.name}.find(filter) == std::string_view::npos) {
+        continue;
+      }
+      ++tests_run;
       detail::current_test   = test_case.name;
       detail::current_failed = false;
       try {
@@ -192,13 +242,39 @@ namespace test {
         ++tests_failed;
       }
     }
-    std::printf("%zu tests | %d checks passed | %d checks failed\n", registry().size(), detail::checks_passed, detail::checks_failed);
+    if (tests_run == 0) {
+      const std::string scope {filter.empty() ? std::string {} : " whose name holds " + std::string {filter}};
+      std::printf("0 tests | 0 checks passed | 0 checks failed\nFAILED (no test registered%s)\n", scope.c_str());
+      return 1;
+    }
+    std::printf("%zu tests | %d checks passed | %d checks failed\n", tests_run, detail::checks_passed, detail::checks_failed);
     if (tests_failed > 0) {
       std::printf("FAILED (%d test(s))\n", tests_failed);
       return 1;
     }
     std::printf("OK\n");
     return 0;
+  }
+
+  /*!
+   * \brief Runs all registered tests.
+   * \return As \ref run_all(std::string_view) with no filter.
+   */
+  inline int run_all()
+  {
+    return run_all(std::string_view {});
+  }
+
+  /*!
+   * \brief Runs the tests a command line asks for: those whose name holds its first argument, or all.
+   * \param[in] argc The argument count.
+   * \param[in] argv The arguments.
+   * \return As \ref run_all(std::string_view).
+   */
+  inline int run_all(int    argc,
+                     char** argv)
+  {
+    return run_all(argc > 1 ? std::string_view {argv[1]} : std::string_view {});
   }
 } // namespace test
 
@@ -222,6 +298,13 @@ namespace test {
  *  \param b The expected value.
  */
 #define EXPECT_EQ(a, b) ::test::detail::check_eq((a), (b), __FILE__, __LINE__, #a " == " #b)
+
+/*! \brief Checks that two floating-point values differ by at most a tolerance.
+ *  \param a   The actual value.
+ *  \param b   The expected value.
+ *  \param tol The largest difference accepted.
+ */
+#define EXPECT_NEAR(a, b, tol) ::test::detail::check_near((a), (b), (tol), __FILE__, __LINE__, #a " ≈ " #b " ± " #tol)
 
 /*! \brief Checks that an expression throws a specific exception type.
  *  \param expr     Expression to evaluate.
