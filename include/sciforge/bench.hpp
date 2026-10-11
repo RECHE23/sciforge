@@ -196,6 +196,15 @@ namespace sciforge::bench {
     return {buffer, static_cast<std::size_t>(written)};
   }
 
+  //! \brief Renders an integral \p value exactly, as a JSON integer: a count or a size compared across runs
+  //!        must not go through \ref json_number, whose %.6g writes both 1048576 and 1048577 as 1.04858e+06.
+  template <typename Integer>
+  requires(std::is_integral_v<Integer> && !std::is_same_v<Integer, bool>)
+  std::string json_integer(Integer value)
+  {
+    return std::to_string(value);
+  }
+
   //! \brief Joins pre-rendered JSON \p items with commas.
   inline std::string json_join(const std::vector<std::string>& items)
   {

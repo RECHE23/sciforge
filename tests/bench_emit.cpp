@@ -57,6 +57,14 @@ TEST(do_not_optimize_applies_to_scalar_and_class)
   EXPECT_EQ(text.size(), std::size_t {5});
 }
 
+TEST(json_integer_is_exact_where_json_number_rounds)
+{
+  EXPECT(bench::json_integer(1048577) == "1048577");
+  EXPECT(bench::json_number(1048577.0) == bench::json_number(1048576.0)); // why counts take json_integer
+  EXPECT(bench::json_integer(std::size_t {18446744073709551615ULL}) == "18446744073709551615");
+  EXPECT(bench::json_integer(-42) == "-42");
+}
+
 int main()
 {
   // A known Run: meta + two cases with round literal samples, a domain field on each (emitted
@@ -67,7 +75,7 @@ int main()
   cases.push_back(bench::emit_case("alpha", "s", {1e-6, 2e-6, 3e-6},
                                    {{"family", bench::json_string("x")}}));
   cases.push_back(bench::emit_case("beta", "s", {4e-6, 5e-6},
-                                   {{"size", bench::json_number(1024.0)}},
+                                   {{"size", bench::json_integer(1024)}},
                                    bench::json_string("ok")));
   // Every control character JSON forbids raw in a string, and the non-finite samples printf spells
   // in a way no JSON reader takes.
