@@ -97,16 +97,19 @@ binding-selftest-gpp:
 	 ext=examples/binding_consumer/bindingdemo/_demo.abi3.so; \
 	 echo "g++ selftest: $$gpp ($$(uname -s))"; \
 	 conflict=examples/binding_consumer/bindingdemo/_conflict.abi3.so; \
+	 throwing=examples/binding_consumer/bindingdemo/_throwing.abi3.so; \
 	 $$gpp -std=c++20 -O2 -fPIC $$link -Wall -Wextra -DPy_LIMITED_API=0x030A0000 \
 	   -Iinclude -I$$pyinc examples/binding_consumer/bindingdemo/_demo.cpp -o $$ext && \
 	 $$gpp -std=c++20 -O2 -fPIC $$link -Wall -Wextra -DPy_LIMITED_API=0x030A0000 \
 	   -Iinclude -I$$pyinc examples/binding_consumer/bindingdemo/_conflict.cpp -o $$conflict && \
+	 $$gpp -std=c++20 -O2 -fPIC $$link -Wall -Wextra -DPy_LIMITED_API=0x030A0000 \
+	   -Iinclude -I$$pyinc examples/binding_consumer/bindingdemo/_throwing.cpp -o $$throwing && \
 	 if $$gpp -std=c++20 -fsyntax-only -DPy_LIMITED_API=0x030A0000 -Iinclude -I$$pyinc \
 	      examples/binding_consumer/negative/required_after_optional.cpp 2>/dev/null; then \
-	   echo "binding-selftest-gpp: a required arg() after a defaulted one compiled"; rm -f $$ext $$conflict; exit 1; \
+	   echo "binding-selftest-gpp: a required arg() after a defaulted one compiled"; rm -f $$ext $$conflict $$throwing; exit 1; \
 	 fi && \
 	 PYTHONPATH=examples/binding_consumer $(PYTHON) -m unittest discover -s examples/binding_consumer/python/tests; \
-	 status=$$?; rm -f $$ext $$conflict; exit $$status
+	 status=$$?; rm -f $$ext $$conflict $$throwing; exit $$status
 
 # Selftest the dev-only benchmark substrate (python/sciforge/bench): pure-stdlib stats and
 # the exchange schema. Selftest-first — the substrate is proven here before any consumer

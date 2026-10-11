@@ -1,3 +1,4 @@
+import ctypes
 import sys
 import unittest
 
@@ -381,6 +382,15 @@ class KeywordSpecTest(unittest.TestCase):
         with self.assertRaises(TypeError) as caught:
             bindingdemo.greater()
         self.assertIn("greater", str(caught.exception))
+
+    def test_an_unsigned_default_above_the_signed_range_keeps_its_value(self):
+        self.assertEqual(bindingdemo.up_to(), 2 ** (8 * ctypes.sizeof(ctypes.c_size_t)) - 1)
+        self.assertEqual(bindingdemo.up_to(3), 3)
+
+    def test_an_exception_during_registration_fails_the_import(self):
+        with self.assertRaises(Exception) as caught:
+            import bindingdemo._throwing  # noqa: F401
+        self.assertIn("registration failed", str(caught.exception))
 
     def test_a_function_registered_twice_with_keywords_fails_the_import(self):
         with self.assertRaises(SystemError) as caught:

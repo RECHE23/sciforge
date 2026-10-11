@@ -106,7 +106,14 @@ namespace sciforge::binding {
           ::sciforge::binding::module_builder<&sciforge_module_error> m(sciforge_module_table,    \
                                                                         module);                  \
           ++::sciforge::binding::registration_epoch();                                            \
-          sciforge_module_register(m);                                                            \
+          try { /* an exception must not cross the extern "C" PyInit: it becomes the import's error */ \
+            sciforge_module_register(m);                                                          \
+          }                                                                                       \
+          catch (...) {                                                                           \
+            ::sciforge::binding::set_cpp_error(sciforge_module_error_storage);                    \
+            Py_DECREF(module);                                                                  \
+            return nullptr;                                                                     \
+          }                                                                                       \
           if (PyErr_Occurred() != nullptr) { /* a default failed to allocate, or a spec registered twice */ \
             Py_DECREF(module);                                                                  \
             return nullptr;                                                                     \

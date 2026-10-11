@@ -464,8 +464,15 @@ namespace sciforge::binding {
         PyModule_AddObjectRef(module_, attr, class_type<T>());
         return;
       }
-      class_methods<T>().push_back(PyMethodDef {.ml_name = nullptr, .ml_meth = nullptr, .ml_flags = 0, .ml_doc = nullptr});
-      class_getsets<T>().push_back(PyGetSetDef {.name    = nullptr, .get = nullptr, .set = nullptr, .doc = nullptr, .closure = nullptr});
+      // finish runs in the destructor, which must not throw: an allocation failure becomes the import's error.
+      try {
+        class_methods<T>().push_back(PyMethodDef {.ml_name = nullptr, .ml_meth = nullptr, .ml_flags = 0, .ml_doc = nullptr});
+        class_getsets<T>().push_back(PyGetSetDef {.name    = nullptr, .get = nullptr, .set = nullptr, .doc = nullptr, .closure = nullptr});
+      }
+      catch (...) {
+        PyErr_NoMemory();
+        return;
+      }
       // Up to nine slots: dealloc/methods/getset, optionally tp_repr / tp_richcompare / tp_hash,
       // optionally tp_new+tp_init when constructible, then the terminator.
       PyType_Slot  slots[9] = {};

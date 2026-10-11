@@ -143,7 +143,13 @@ namespace sciforge::binding {
       }
       else {
         static_assert(std::is_integral_v<T>, "unsupported default-argument type");
-        obj = PyLong_FromLongLong(static_cast<long long>(value));
+        if constexpr (std::is_unsigned_v<T>) {
+          // Through long long, a value above LLONG_MAX (SIZE_MAX, a "no limit" default) would read as negative.
+          obj = PyLong_FromUnsignedLongLong(static_cast<unsigned long long>(value));
+        }
+        else {
+          obj = PyLong_FromLongLong(static_cast<long long>(value));
+        }
       }
       return obj != nullptr ? obj : PyErr_NoMemory(); // PyErr_NoMemory sets MemoryError, returns nullptr
     }

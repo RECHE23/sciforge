@@ -190,6 +190,11 @@ namespace {
     return x > n;
   }                                                                   // arg("x"), arg("n") = 0
 
+  std::size_t up_to(std::size_t n)
+  {
+    return n;
+  }                                                                    // arg("n") = SIZE_MAX (an unsigned default)
+
   std::string suffixed(std::string s,
                        std::string suffix)
   {
@@ -393,6 +398,7 @@ SCIFORGE_MODULE(_demo, "bindingdemo.error", m)
   m.def<&handle_value>("handle_value", "capsule -> value");
   // N3a — keyword/optional arg-syntax.
   m.def<&greater>("greater", "x, n=0 -> x > n", sb::arg("x"), sb::arg("n")                  = 0LL);
+  m.def<&up_to>("up_to", "n=SIZE_MAX -> n", sb::arg("n")                                    = std::numeric_limits<std::size_t>::max());
   m.def<&suffixed>("suffixed", "s, suffix='!' -> s+suffix", sb::arg("s"), sb::arg("suffix") = "!");
   m.def<&defaulted_to_none>("defaulted_to_none", "x, extra=None -> extra is None",
                             sb::arg("x"), sb::arg("extra") = sb::none);
