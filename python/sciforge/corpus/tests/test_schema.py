@@ -99,6 +99,21 @@ class TestTrapCases(unittest.TestCase):
                      semantics="leftmost-longest", oracle="python_re"),
             BUG)  # corpus_expected == oracle_result, so this row IS in contract -> a real miss is a bug
 
+    def test_out_of_contract_needs_real_to_meet_the_oracle_or_the_row(self):
+        # A foreign-semantics row real meets neither way is a bug, not the foreign rule's doing: a crash or a
+        # wrong answer must not hide behind out_of_contract.
+        self.assertEqual(classify(real_result=None, oracle_result=(0, 1), corpus_expected=(0, 3),
+                                  semantics="posix", oracle="python_re"), BUG)
+        self.assertEqual(classify(real_result=(0, 3), oracle_result=(0, 1), corpus_expected=(0, 3),
+                                  semantics="posix", oracle="python_re"), OUT_OF_CONTRACT)
+
+    def test_a_crash_on_real_s_side_is_a_bug(self):
+        crash = {"exception": "TypeError"}
+        self.assertEqual(classify(real_result=crash, oracle_result=crash, corpus_expected=(0, 1),
+                                  semantics="leftmost-first", oracle="python_re"), BUG)
+        self.assertEqual(classify(real_result=crash, oracle_result=(0, 1), corpus_expected=(0, 3),
+                                  semantics="posix", oracle="python_re"), BUG)
+
     def test_an_expectation_constrains_only_the_groups_it_states(self):
         # A Fowler outcome may list fewer groups than the pattern has; the oracle reports all of them.
         # Agreeing on what is stated keeps the row in contract, so a real miss there is a bug.
@@ -165,6 +180,8 @@ class TestValidation(unittest.TestCase):
             _manifest(oracle="grep").validate()
         with self.assertRaises(SchemaError):
             _manifest(origin="").validate()
+        with self.assertRaises(SchemaError):
+            _manifest(api="serch").validate()
         _manifest().validate()  # a good one does not raise
 
     def test_case_override_needs_reason_and_link(self):

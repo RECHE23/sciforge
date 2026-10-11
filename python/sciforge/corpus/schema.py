@@ -33,6 +33,10 @@ ORACLES = ("python_re", "std_regex", "reference_tokenize", "real_only")
 #: The input domain.
 CASE_TYPES = ("text", "bytes")
 
+#: The engine entry points a manifest may name: what the runner's driver calls (a misspelled one would make
+#: every case an exception on both sides).
+APIS = ("search", "match", "fullmatch", "finditer")
+
 #: The match-selection semantics each oracle itself uses — the yardstick the origin's `semantics` is
 #: compared against. python_re and std_regex (ECMAScript) are leftmost-first; the lexer oracle is
 #: maximal-munch; real_only means the corpus IS real's own pinned behaviour (leftmost-first).
@@ -81,7 +85,8 @@ class Manifest:
         """Return self after checking the constrained fields; raise :class:`SchemaError` otherwise."""
         for name, value, allowed in (("semantics", self.semantics, SEMANTICS),
                                      ("type", self.type, CASE_TYPES),
-                                     ("oracle", self.oracle, ORACLES)):
+                                     ("oracle", self.oracle, ORACLES),
+                                     ("api", self.api, APIS)):
             if value not in allowed:
                 raise SchemaError("manifest {} {!r} not in {}".format(name, value, allowed))
         for name in ("origin", "sha256", "license", "attribution", "retrieved", "api"):
@@ -167,12 +172,19 @@ def classify(real_result,
     # 1. A pattern that needs an excluded capability is counted apart, never as a failure.
     if requires:
         return EXCLUDED_BY_DESIGN
+    # 1b. The engine's driver raised: a crash on real's side is never a pass, nor set aside, even when the oracle
+    #     raised the same way.
+    if isinstance(real_result, dict) and "exception" in real_result:
+        return BUG
     # 2. out_of_contract is decided by the manifest, not case-by-case: when the origin's semantics
     #    differ from the oracle's own, a case whose stored expectation reflects the origin rule (it
     #    disagrees with what the oracle produces) is outside this corpus's contract with our oracle.
+    #    Only when real agrees with the oracle or with the stored row: an answer that meets neither is not
+    #    explained by the foreign semantics.
     if (semantics != ORACLE_SEMANTICS.get(oracle)
             and corpus_expected is not None
-            and not expectation_holds(corpus_expected, oracle_result)):
+            and not expectation_holds(corpus_expected, oracle_result)
+            and (real_result == oracle_result or expectation_holds(corpus_expected, real_result))):
         return OUT_OF_CONTRACT
     # 3. The engine agrees with the authority. Under real_only the authority is the stored expectation,
     #    which binds only what it states (a Fowler outcome may list fewer groups than the pattern has).
