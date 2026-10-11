@@ -92,7 +92,7 @@ namespace test {
       last_file      = file;
       last_line      = line;
       std::printf("  FAIL %s:%d [%s] %s\n", file, line, current_test, message.c_str());
-      std::fflush(stdout); // a crash later in the run must not take this line with the unflushed buffer
+      (void)std::fflush(stdout); // a crash later in the run must not take this line with the unflushed buffer
     }
 
     /*!\brief Checks a boolean condition.
@@ -250,7 +250,7 @@ namespace test {
         reported = true;
         std::printf("  CRASH [%s] signal %d, after the check at %s:%d\n", current_test, signal_number,
                     last_line == 0 ? "[none]" : last_file, last_line);
-        std::fflush(stdout);
+        (void)std::fflush(stdout);
       }
       signal_handler previous {previous_handlers.ill};
       if (signal_number == SIGSEGV) {
@@ -262,8 +262,8 @@ namespace test {
       else if (signal_number == SIGFPE) {
         previous = previous_handlers.fpe;
       }
-      std::signal(signal_number, previous == SIG_ERR ? SIG_DFL : previous);
-      std::raise(signal_number);
+      (void)std::signal(signal_number, previous == SIG_ERR ? SIG_DFL : previous);
+      (void)std::raise(signal_number);
     }
   } // namespace detail
 

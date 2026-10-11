@@ -71,19 +71,19 @@ TEST(selftest_scenario)
   }
   else if (std::strcmp(g_scenario, "segv") == 0) {
     EXPECT(true);
-    std::raise(SIGSEGV);                                               // each crash signal names the test
+    (void)std::raise(SIGSEGV);                                               // each crash signal names the test
   }
   else if (std::strcmp(g_scenario, "fpe") == 0) {
     EXPECT(true);
-    std::raise(SIGFPE);
+    (void)std::raise(SIGFPE);
   }
   else if (std::strcmp(g_scenario, "ill") == 0) {
     EXPECT(true);
-    std::raise(SIGILL);
+    (void)std::raise(SIGILL);
   }
   else if (std::strcmp(g_scenario, "killed") == 0) {
     EXPECT(false);                                                     // flushed as printed: a kill runs no handler
-    std::raise(SIGKILL);                                               // (a ctest timeout kills this way)
+    (void)std::raise(SIGKILL);                                         // (a ctest timeout kills this way)
   }
   else if (std::strcmp(g_scenario, "escaped_exception") == 0) {
     EXPECT(true);                                                      // the last check before the throw: named
