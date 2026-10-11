@@ -28,6 +28,20 @@ SCENARIOS = {
     "filter":             (0, "1 tests | 0 checks passed | 0 checks failed"),
     "filter_argv":        (0, "1 tests | 0 checks passed | 0 checks failed"),
     "filter_none":        (1, "FAILED (no test registered whose name holds no such test)"),
+    # A crash (None: any failing exit, a signal included) keeps the failure printed before it and names the test
+    # and its last check, even with stdout redirected to a file, where it is fully buffered.
+    "crash":              (None, "CRASH [selftest_scenario] signal"),
+    "segv":               (None, "CRASH [selftest_scenario] signal"),
+    "fpe":                (None, "CRASH [selftest_scenario] signal"),
+    "ill":                (None, "CRASH [selftest_scenario] signal"),
+    "killed":             (None, "FAIL"),
+    "escaped_exception":  (1, "[selftest_scenario] unexpected exception after this check: boom"),
+}
+
+# Lines a scenario's output must hold besides its summary.
+ALSO = {
+    "crash": ["FAIL", "after the check at", "framework_selftest.cpp:"],
+    "escaped_exception": ["framework_selftest.cpp:"],
 }
 
 
@@ -39,12 +53,13 @@ def main():
     failures = 0
     for scenario, (want_rc, want_str) in SCENARIOS.items():
         proc = subprocess.run([child, scenario], capture_output=True, text=True)
-        if proc.returncode != want_rc:
+        if (proc.returncode == 0) if want_rc is None else (proc.returncode != want_rc):
             print(f"FAIL {scenario}: exit {proc.returncode} != {want_rc}")
             failures += 1
-        if want_str not in proc.stdout:
-            print(f"FAIL {scenario}: summary missing {want_str!r} in: {proc.stdout.strip()}")
-            failures += 1
+        for wanted in [want_str] + ALSO.get(scenario, []):
+            if wanted not in proc.stdout:
+                print(f"FAIL {scenario}: output missing {wanted!r} in: {proc.stdout.strip()}")
+                failures += 1
     if failures:
         print(f"framework-selftest: {failures} check(s) failed")
         return 1

@@ -11,6 +11,7 @@
 #define SCIFORGE_TEST_FRAMEWORK_HPP
 
 #include <cmath>
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <exception>
@@ -65,6 +66,17 @@ namespace test {
     inline int         checks_failed  = 0;     //!< Number of assertions that failed.
     inline const char* current_test   = "";    //!< Name of the currently running test.
     inline bool        current_failed = false; //!< Whether the current test has failed.
+    inline const char* last_file      = "";    //!< Source file of the last check run, failed or not.
+    inline int         last_line      = 0;     //!< Its line: where an exception escaping a test was last seen.
+
+    //! \brief Counts a passed check at \p file : \p line.
+    inline void passed(const char* file,
+                       int         line)
+    {
+      ++checks_passed;
+      last_file = file;
+      last_line = line;
+    }
 
     /*!\brief Reports a failed assertion.
      * \param[in] file    Source file where the failure occurred.
@@ -77,7 +89,10 @@ namespace test {
     {
       ++checks_failed;
       current_failed = true;
+      last_file      = file;
+      last_line      = line;
       std::printf("  FAIL %s:%d [%s] %s\n", file, line, current_test, message.c_str());
+      std::fflush(stdout); // a crash later in the run must not take this line with the unflushed buffer
     }
 
     /*!\brief Checks a boolean condition.
@@ -92,7 +107,7 @@ namespace test {
                       const char* expr)
     {
       if (condition) {
-        ++checks_passed;
+        passed(file, line);
         return;
       }
       report_failure(file, line, expr);
@@ -173,7 +188,7 @@ namespace test {
         equal = (actual == expected);
       }
       if (equal) {
-        ++checks_passed;
+        passed(file, line);
         return;
       }
       std::ostringstream oss;
@@ -200,13 +215,55 @@ namespace test {
                            const char* expr)
     {
       if (std::abs(actual - expected) <= tolerance) {
-        ++checks_passed;
+        passed(file, line);
         return;
       }
       std::ostringstream oss;
       oss.precision(17);
       oss << expr << " — actual: " << actual << ", expected: " << expected << ", tolerance: " << tolerance;
       report_failure(file, line, oss.str());
+    }
+
+    //! \brief The handlers a crash signal had before \ref run_all, by signal: a sanitizer's own report follows ours.
+    using signal_handler = void (*)(int); //!< What std::signal installs and returns.
+
+    struct crash_handlers
+    {
+      signal_handler segv {SIG_DFL}; //!< SIGSEGV's.
+      signal_handler abrt {SIG_DFL}; //!< SIGABRT's.
+      signal_handler fpe  {SIG_DFL}; //!< SIGFPE's.
+      signal_handler ill  {SIG_DFL}; //!< SIGILL's.
+    };
+
+    inline crash_handlers previous_handlers {};
+
+    /*!
+     * \brief Names the running test and its last check when a signal ends the run, then hands the signal to
+     *        the handler it had before (a sanitizer's, or the default that ends the process with it). Not
+     *        async-signal-safe: the process is going down, and the line is all a redirected log would keep.
+     * \param[in] signal_number The signal received.
+     */
+    inline void report_crash(int signal_number)
+    {
+      static bool reported {false}; // a sanitizer's report ends in abort: one line per run
+      if (!reported) {
+        reported = true;
+        std::printf("  CRASH [%s] signal %d, after the check at %s:%d\n", current_test, signal_number,
+                    last_line == 0 ? "[none]" : last_file, last_line);
+        std::fflush(stdout);
+      }
+      signal_handler previous {previous_handlers.ill};
+      if (signal_number == SIGSEGV) {
+        previous = previous_handlers.segv;
+      }
+      else if (signal_number == SIGABRT) {
+        previous = previous_handlers.abrt;
+      }
+      else if (signal_number == SIGFPE) {
+        previous = previous_handlers.fpe;
+      }
+      std::signal(signal_number, previous == SIG_ERR ? SIG_DFL : previous);
+      std::raise(signal_number);
     }
   } // namespace detail
 
@@ -220,6 +277,10 @@ namespace test {
   {
     int         tests_failed {0};
     std::size_t tests_run    {0};
+    detail::previous_handlers.segv = std::signal(SIGSEGV, detail::report_crash);
+    detail::previous_handlers.abrt = std::signal(SIGABRT, detail::report_crash);
+    detail::previous_handlers.fpe  = std::signal(SIGFPE, detail::report_crash);
+    detail::previous_handlers.ill  = std::signal(SIGILL, detail::report_crash);
     for (const auto& test_case : registry()) {
       if (std::string_view {test_case.name}.find(filter) == std::string_view::npos) {
         continue;
@@ -227,16 +288,20 @@ namespace test {
       ++tests_run;
       detail::current_test   = test_case.name;
       detail::current_failed = false;
+      detail::last_file      = "";
+      detail::last_line      = 0;
       try {
         test_case.function();
       }
+      // An exception escaping the test body has no source location: it is reported at the last check that ran,
+      // the nearest place the test is known to have reached.
       catch (const std::exception& ex) {
-        // No source location for an exception escaping the test body; the test name is already
-        // shown via [current_test], so the file field is a placeholder.
-        detail::report_failure("[unknown]", 0, std::string("unexpected exception: ") + ex.what());
+        detail::report_failure(detail::last_line == 0 ? "[before any check]" : detail::last_file, detail::last_line,
+                               std::string("unexpected exception after this check: ") + ex.what());
       }
       catch (...) {
-        detail::report_failure("[unknown]", 0, "unexpected non-standard exception");
+        detail::report_failure(detail::last_line == 0 ? "[before any check]" : detail::last_file, detail::last_line,
+                               "unexpected non-standard exception after this check");
       }
       if (detail::current_failed) {
         ++tests_failed;

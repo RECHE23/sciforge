@@ -4,7 +4,9 @@
 // framework-selftest) runs it once per scenario and checks the exit code and the printed check counts.
 //
 // This is deliberately NOT part of the main test binary: several scenarios fail on purpose.
+#include <csignal>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -62,6 +64,30 @@ TEST(selftest_scenario)
     EXPECT_NEAR(1.0, 1.0 + 1e-12, 1e-9);                               // within: passes
     EXPECT_NEAR(1.0, 1.1, 1e-3);                                       // beyond: one failed check
     EXPECT_NEAR(std::numeric_limits<double>::quiet_NaN(), 1.0, 1e300); // a NaN never is near
+  }
+  else if (std::strcmp(g_scenario, "crash") == 0) {
+    EXPECT(false);                                                     // printed before the crash, and kept
+    std::abort();                                                      // the log names the test and the last check
+  }
+  else if (std::strcmp(g_scenario, "segv") == 0) {
+    EXPECT(true);
+    std::raise(SIGSEGV);                                               // each crash signal names the test
+  }
+  else if (std::strcmp(g_scenario, "fpe") == 0) {
+    EXPECT(true);
+    std::raise(SIGFPE);
+  }
+  else if (std::strcmp(g_scenario, "ill") == 0) {
+    EXPECT(true);
+    std::raise(SIGILL);
+  }
+  else if (std::strcmp(g_scenario, "killed") == 0) {
+    EXPECT(false);                                                     // flushed as printed: a kill runs no handler
+    std::raise(SIGKILL);                                               // (a ctest timeout kills this way)
+  }
+  else if (std::strcmp(g_scenario, "escaped_exception") == 0) {
+    EXPECT(true);                                                      // the last check before the throw: named
+    always_throws();
   }
   else if (std::strcmp(g_scenario, "counts") == 0) {
     EXPECT(true);                                                      // 2 passed,
