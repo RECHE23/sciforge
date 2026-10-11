@@ -188,6 +188,7 @@ release:
 	  if [ "v$$proj" != "$$version" ]; then \
 	    echo "release: next tag is $$version but python/sciforge-build/pyproject.toml says $$proj -- bump it to $${version#v} and commit first (release.yml refuses the mismatch only after the tag is public)"; \
 	    exit 1; fi; \
+	  grep -qx "## $${version#v}" CHANGELOG.md || { echo "release: CHANGELOG.md has no '## $${version#v}' section -- describe the tag, contract changes included"; exit 1; }; \
 	  if [ -n "$(DRY_RUN)" ]; then echo "[dry-run] would tag and push $$version"; exit 0; fi; \
 	  echo "Releasing $$version"; \
 	  git tag "$$version"; \

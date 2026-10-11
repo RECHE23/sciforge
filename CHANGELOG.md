@@ -1,0 +1,37 @@
+# Changelog
+
+All notable changes to SciForge, by tag. Versions are CalVer (`vYEAR.MONTH.PATCH`, the patch resetting each
+month). A change to what an existing name means is listed under **Contract changes** (see CONVENTIONS.md,
+"Versioning"); `make release` refuses a tag this file does not describe.
+
+## 2026.10.3
+
+### Fixed
+- **The MISRA base self-test gates on clang-tidy's exit status**, as every consumer's `make misra` does: dropping
+  `WarningsAsErrors` from `lint/clang-tidy-misra` stayed green before.
+- **A crashing test keeps the failures printed before it and names itself.** With stdout redirected, a crash took
+  every FAIL line with the unflushed buffer; a SIGSEGV, SIGABRT, SIGFPE or SIGILL now prints the running test and
+  its last check, then goes to the handler it had before (a sanitizer's report follows). An exception escaping a
+  test is reported at the last check that ran.
+- **Binding:** an unsigned default above `LLONG_MAX` (`SIZE_MAX`) kept its value instead of reading as -1; a C++
+  exception during module registration, or a failed allocation finishing a class, fails the import instead of
+  ending the process.
+- **Corpus:** an exception on the engine's side is a bug, never a pass; `out_of_contract` needs the engine to agree
+  with the oracle or the stored row; a manifest's `api` must name an entry point the driver calls.
+- **Release:** `make release` tags only a commit whose CI and CI selftest are green; `cibuildwheel` and `build`
+  are pinned (inputs of `build-wheels.yml`, defaulting to 4.3.1 and 1.6.1); the Uncrustify tarball's sha256 is
+  checked.
+
+### Added
+- `sciforge::bench::json_integer`, a count or a size written exactly (`json_number`'s `%.6g` writes 1048576 and
+  1048577 alike).
+
+### Contract changes
+- None.
+
+## 2026.10.2
+
+### Contract changes
+- **A `PyObject*` returned through `def<>` or `def_prop_ro` is a new reference** (2b616db): the caster took one
+  of its own before. A binding that returned a borrowed reference must now return an owned one. Published sdists
+  whose floor admits 2026.10.2 build against this meaning.

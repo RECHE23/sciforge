@@ -70,5 +70,9 @@ version; `--self-test` proves each form is read.
 - Consumers pin the `sciforge-build` backend with a **floor, never an exact pin**: `sciforge-build>=X`,
   not `==X`. A floor lets a consumer pick up a compatible fix without a lockstep release; SciForge keeps
   the build backend backward-compatible within a CalVer line.
+- **A contract change takes a new name.** What an existing name means — a binding's return convention, a
+  macro's expansion, a field of the bench schema — does not change within a CalVer line: the new behaviour
+  gets a new name beside the old. Where that is impossible, CHANGELOG.md lists it under **Contract changes**
+  for that tag, and every consumer raises its floor past it in the same train.
 - **Generated tables / files** (a repo's `gen_*` scripts) are regenerated only by their script, never
   edited by hand; a regen that changes any output is a call-out in the release notes, not a silent bump.
