@@ -169,6 +169,12 @@ release:
 	@branch=$$(git symbolic-ref --short HEAD 2>/dev/null); \
 	  test "$$branch" = main || { echo "release: must be on main (on '$$branch')"; exit 1; }
 	@test -z "$$(git status --porcelain)" || { echo "release: working tree not clean"; exit 1; }
+	@sha=$$(git rev-parse HEAD); \
+	  for workflow in "CI" "CI selftest"; do \
+	    state=$$(gh run list --workflow "$$workflow" --commit "$$sha" --json status,conclusion \
+	      --jq '.[0] | if . == null then "not run" elif .status != "completed" then .status else .conclusion end'); \
+	    test "$$state" = success || { echo "release: workflow '$$workflow' is '$$state' on $$sha -- tag only a commit whose CI is green (the tag publishes to PyPI)"; exit 1; }; \
+	  done
 	@if [ -z "$(DRY_RUN)" ]; then \
 	   git remote get-url origin >/dev/null 2>&1 || { echo "release: no 'origin' remote"; exit 1; }; \
 	   git fetch --tags --quiet origin; \

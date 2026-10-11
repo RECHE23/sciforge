@@ -18,6 +18,7 @@ name: build-wheels (reusable)
 #   wheel-os          JSON array of runner OSes for the cibuildwheel matrix
 #   cibw-archs-macos  CIBW_ARCHS_MACOS, default "x86_64 arm64"
 #   cibw-environment  CIBW_ENVIRONMENT, default '' (none)
+#   cibuildwheel-version, build-version  the release tools, pinned so a release builds as the last one did
 
 on:
   workflow_call:
@@ -26,6 +27,8 @@ on:
       wheel-os:         { type: string, default: '["ubuntu-latest","ubuntu-24.04-arm","macos-latest","windows-latest"]' }
       cibw-archs-macos: { type: string, default: 'x86_64 arm64' }
       cibw-environment: { type: string, default: '' }
+      cibuildwheel-version: { type: string, default: '4.3.1' }
+      build-version:    { type: string, default: '1.6.1' }
       # A job invoked with `uses:` cannot carry timeout-minutes at the caller, so the ceiling lives here.
       timeout-minutes:  { type: number, default: 45 }
 
@@ -68,7 +71,8 @@ jobs:
           PACKAGE_DIR: ${{ inputs.package-dir }}
           CIBW_ARCHS_MACOS: ${{ inputs.cibw-archs-macos }}
           CIBW_ENVIRONMENT: ${{ inputs.cibw-environment }}
-        run: pipx run cibuildwheel "$PACKAGE_DIR" --output-dir wheelhouse
+          CIBUILDWHEEL_VERSION: ${{ inputs.cibuildwheel-version }}
+        run: pipx run "cibuildwheel==$CIBUILDWHEEL_VERSION" "$PACKAGE_DIR" --output-dir wheelhouse
       - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
@@ -84,7 +88,8 @@ jobs:
         shell: bash
         env:
           PACKAGE_DIR: ${{ inputs.package-dir }}
-        run: pipx run build --sdist --outdir dist "$PACKAGE_DIR"
+          BUILD_VERSION: ${{ inputs.build-version }}
+        run: pipx run "build==$BUILD_VERSION" --sdist --outdir dist "$PACKAGE_DIR"
       - uses: actions/upload-artifact@v7
         with:
           name: sdist
