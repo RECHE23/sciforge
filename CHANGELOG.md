@@ -7,6 +7,10 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+### Changed
+- **The Releases page carries the tag's annotation** (`release.yml`): the CHANGELOG section `make release` annotates the
+  tag with, before a `docs/release-notes/<tag>.md` and the list of commits it fell back to.
+
 ## 2026.10.4 — 2026-10-18
 
 ### Added
