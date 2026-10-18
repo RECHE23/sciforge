@@ -81,8 +81,8 @@ jobs:
   # substrate-under-MSVC wiring, so N2/N3 (the templated casters) won't meet MSVC cold.
   # Kept separate from python-cpp / build-wheels above, whose py_consumer fixture stays
   # a PyPI-clean leaf.
-  # The verification tiers every project includes (make/quality.mk, tools/run-gate.sh): each verdict provoked on
-  # purpose in a scratch repository, under Linux's and macOS's bash and make.
+  # The verification tiers and the release every project includes (make/quality.mk, make/release.mk): each verdict
+  # provoked on purpose in a scratch repository, under Linux's and macOS's bash and make.
   gate-selftest:
     strategy:
       fail-fast: true  # cancel sibling matrix legs on first red (save CI minutes)
@@ -92,12 +92,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - name: Self-test the verification tiers
+      - name: Self-test the verification tiers and the release
         shell: bash
         run: |
           git config --global user.email ci@example.invalid
           git config --global user.name ci
-          make quality-selftest
+          make quality-selftest release-selftest
 
   binding-selftest:
     strategy:

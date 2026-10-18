@@ -81,6 +81,16 @@ The tiers run fail-fast and print each step's time; they take one lock per tree 
 first lives, and a gate whose `HEAD` or working tree moved while it ran reports its verdict void. A check moves
 between tiers when its cost or its catch rate says so; none leaves every tier without the maintainer's word.
 
+## Releasing (`make/release.mk`)
+
+Every project cuts its releases with the same mechanism: `include $(SCIFORGE)/make/release.mk`, after naming the
+files its version lives in (`RELEASE_FILES`), the target that writes a version into them (`RELEASE_BUMP`, default
+`release-bump`, given `VERSION=`), the checks a release needs first (`RELEASE_PRECHECK`) and the workflows that must
+be green on the commit tagged (`RELEASE_CI`, default `CI`). `CHANGELOG.md` keeps a `## Unreleased` section at its
+top, written as the work lands; `make release` refuses an empty one, files it under `## <version> — <date>`,
+annotates the tag with it, commits the bump as `release: v<version>` and pushes both. `make release DRY_RUN=1`
+rehearses every step and leaves the tree as it found it. The maintainer runs `make release`: publishing is theirs.
+
 ## Versioning and the `sciforge-build` floor
 
 - SciForge follows **CalVer** (`vYEAR.MONTH.PATCH`; the patch resets each month). A tag is infra-only

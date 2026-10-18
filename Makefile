@@ -20,14 +20,14 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest clean release help
+.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest release-selftest clean release help
 
 PYTHON ?= python3
 
 include lint/misra.mk
 
 # The verification tiers every SciForge project shares (make/quality.mk), SciForge's own steps in them.
-QUALITY_COMMIT := format-check test quality-selftest
+QUALITY_COMMIT := format-check test quality-selftest release-selftest
 QUALITY_PUSH   := lint lint-config framework-selftest bench-selftest corpus-selftest bench-cpp-selftest binding-selftest-gpp
 include make/quality.mk
 
@@ -47,7 +47,8 @@ help:
 	@echo "  make corpus-selftest Run the sciforge.corpus substrate selftests (schema + classify)"
 	@echo "  make bench-cpp-selftest  Build the C++ collector selftest (clang+g++) + Python round-trip"
 	@echo "  make quality-selftest  Self-test the verification tiers (tools/run-gate.sh, make/quality.mk)"
-	@echo "  make check-commit  Before each commit: format, self-tests, the tiers' own self-test"
+	@echo "  make release-selftest  Self-test the shared release (tools/release.sh, make/release.mk)"
+	@echo "  make check-commit  Before each commit: format, self-tests, the tiers' and the release's self-tests"
 	@echo "  make check-push    Before each push: the above, lint, MISRA base, every self-test"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
@@ -166,6 +167,11 @@ bench-cpp-selftest:
 # each verdict provoked on purpose in a scratch repository (tools/test/run_gate_selftest.sh).
 quality-selftest:
 	@bash tools/test/run_gate_selftest.sh
+
+# Self-test the calendar release every project cuts (tools/release.sh through make/release.mk): a dry run, a release
+# pushed to a bare remote, and each refusal, in a scratch repository (tools/test/release_selftest.sh).
+release-selftest:
+	@bash tools/test/release_selftest.sh
 
 clean:
 	rm -rf $(BUILD)
