@@ -17,6 +17,7 @@ SCIFORGE      := $here
 RELEASE_FILES := version.txt
 RELEASE_CI    :=
 RELEASE_PRECHECK := \$(if \$(RED_PRECHECK),red-check,green-check)
+RELEASE_ADVISORY := advise
 include \$(SCIFORGE)/make/release.mk
 release-bump:
 	@echo "\$(VERSION)" > version.txt; \$(if \$(STRAY),echo x > other.txt;,) \$(if \$(FAIL_BUMP),exit 4,true)
@@ -24,6 +25,8 @@ green-check:
 	@true
 red-check:
 	@exit 5
+advise:
+	@echo "advice given"; exit 6
 MK
 echo 0 > version.txt
 printf 'out.log\n' > .gitignore
@@ -42,6 +45,8 @@ year=$(date -u +%Y); month=$(date -u +%m | sed 's/^0//')
 expect "a dry run passes" 0 make --no-print-directory release DRY_RUN=1
 grep -q "Releasing v$year.$month.0" out.log || { echo "FAIL: dry run's version"; fails=$((fails + 1)); }
 grep -q "| - the first thing." out.log || { echo "FAIL: dry run's tag body"; fails=$((fails + 1)); }
+grep -q "advice given" out.log && grep -q "advisory check 'advise' failed; proceeding" out.log \
+  || { echo "FAIL: the advisory check did not run, or blocked, in a dry run"; fails=$((fails + 1)); }
 clean "a dry run"
 expect "a failing bump is refused" 2 make --no-print-directory release DRY_RUN=1 FAIL_BUMP=1
 clean "a failing bump"

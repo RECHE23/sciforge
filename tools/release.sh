@@ -8,6 +8,8 @@
 #   RELEASE_BUMP       the project's make target that writes VERSION=<x> into them
 #   RELEASE_PRECHECK   make targets that must pass first (benchmarks against the last release, …); skipped by
 #                      SKIP_PRECHECK=1 and by a dry run
+#   RELEASE_ADVISORY   make targets run in every mode, dry run included, whose failure warns and never blocks
+#                      (benchmarks stamped against another version of a dependency, …)
 #   RELEASE_CI         workflows whose run on HEAD must have succeeded (the tag publishes): none checked if empty
 #   RELEASE_REMOTE     the remote to push to (origin)
 #   DRY_RUN            1: every guard and the bump, the tag body shown, then the tree restored — nothing committed,
@@ -26,6 +28,7 @@ make_cmd=${RELEASE_MAKE:-make}
 files=${RELEASE_FILES:-}
 bump=${RELEASE_BUMP:-}
 precheck=${RELEASE_PRECHECK:-}
+advisory=${RELEASE_ADVISORY:-}
 workflows=${RELEASE_CI:-}
 remote=${RELEASE_REMOTE:-origin}
 dry=${DRY_RUN:-}
@@ -51,6 +54,10 @@ if [ -z "$dry" ] && [ -z "${SKIP_PRECHECK:-}" ]; then
       || die "precheck '$target' failed (SKIP_PRECHECK=1 to release anyway, knowingly)"
   done
 fi
+
+for target in $advisory; do
+  $make_cmd --no-print-directory "$target" || echo "release: WARN — advisory check '$target' failed; proceeding (it never blocks)"
+done
 
 year=$(date -u +%Y)
 month=$(date -u +%m | sed 's/^0//')

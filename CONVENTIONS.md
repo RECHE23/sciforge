@@ -85,7 +85,8 @@ between tiers when its cost or its catch rate says so; none leaves every tier wi
 
 Every project cuts its releases with the same mechanism: `include $(SCIFORGE)/make/release.mk`, after naming the
 files its version lives in (`RELEASE_FILES`), the target that writes a version into them (`RELEASE_BUMP`, default
-`release-bump`, given `VERSION=`), the checks a release needs first (`RELEASE_PRECHECK`) and the workflows that must
+`release-bump`, given `VERSION=`), the checks a release needs first (`RELEASE_PRECHECK`), those that only warn (`RELEASE_ADVISORY`, a dry run
+included) and the workflows that must
 be green on the commit tagged (`RELEASE_CI`, default `CI`). `CHANGELOG.md` keeps a `## Unreleased` section at its
 top, written as the work lands; `make release` refuses an empty one, files it under `## <version> — <date>`,
 annotates the tag with it, commits the bump as `release: v<version>` and pushes both. `make release DRY_RUN=1`

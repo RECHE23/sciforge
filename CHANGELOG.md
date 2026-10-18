@@ -15,7 +15,8 @@ month). A change to what an existing name means is listed under **Contract chang
   runs its own tiers through them; `make quality-selftest` provokes each verdict in a scratch repository.
 - **The calendar release every project cuts the same way** (`make/release.mk`, `tools/release.sh`): `vYEAR.MONTH.PATCH`,
   from `main` with a clean tree and, by default, a green `CI` run on `HEAD` (the tag is what publishes); the project's
-  prechecks (`RELEASE_PRECHECK`, e.g. benchmarks against the last release; `SKIP_PRECHECK=1`) and its version bump
+  prechecks (`RELEASE_PRECHECK`, e.g. benchmarks against the last release; `SKIP_PRECHECK=1`), its advisory checks
+  (`RELEASE_ADVISORY`, run in a dry run too, warning without blocking) and its version bump
   (`RELEASE_BUMP`, which may change only `RELEASE_FILES`); `CHANGELOG.md`'s non-empty `## Unreleased` filed under the
   version and annotating the tag; `DRY_RUN=1` rehearses all of it and restores the tree, as does any refusal before
   the commit. `make release-selftest` cuts releases into a bare remote and provokes each refusal.
