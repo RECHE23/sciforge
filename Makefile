@@ -20,7 +20,7 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest release-selftest clean release help
+.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest release-selftest clean release release-bump help
 
 PYTHON ?= python3
 
@@ -51,7 +51,7 @@ help:
 	@echo "  make check-commit  Before each commit: format, self-tests, the tiers' and the release's self-tests"
 	@echo "  make check-push    Before each push: the above, lint, MISRA base, every self-test"
 	@echo "  make clean         Remove build artifacts"
-	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
+	@echo "  make release       Cut the calendar release: bump, commit, annotated tag, push (publishes sciforge-build)"
 	@echo "                     dry-run: make release DRY_RUN=1"
 	@echo ""
 	@echo "  Override the compiler: make test CXX=g++-14"
@@ -176,39 +176,15 @@ release-selftest:
 clean:
 	rm -rf $(BUILD)
 
-# Cut a calendar-versioned release: vYYYY.M.PATCH where PATCH is the count of tags
-# already cut this calendar month (so the first ever is v2026.6.0). The tag is what
-# consumers pin, and pushing it also publishes sciforge-build to PyPI (release.yml),
-# whose check-version job refuses a tag that differs from
-# python/sciforge-build/pyproject.toml. That refusal comes AFTER the push, when the
-# tag is already public, so the same comparison runs here first: bump the version,
-# commit, then release. Hard guards refuse anything unsafe; `DRY_RUN=1` computes the
-# version and runs every guard without touching git or the remote.
-release:
-	@branch=$$(git symbolic-ref --short HEAD 2>/dev/null); \
-	  test "$$branch" = main || { echo "release: must be on main (on '$$branch')"; exit 1; }
-	@test -z "$$(git status --porcelain)" || { echo "release: working tree not clean"; exit 1; }
-	@sha=$$(git rev-parse HEAD); \
-	  for workflow in "CI" "CI selftest"; do \
-	    state=$$(gh run list --workflow "$$workflow" --commit "$$sha" --json status,conclusion \
-	      --jq '.[0] | if . == null then "not run" elif .status != "completed" then .status else .conclusion end'); \
-	    test "$$state" = success || { echo "release: workflow '$$workflow' is '$$state' on $$sha -- tag only a commit whose CI is green (the tag publishes to PyPI)"; exit 1; }; \
-	  done
-	@if [ -z "$(DRY_RUN)" ]; then \
-	   git remote get-url origin >/dev/null 2>&1 || { echo "release: no 'origin' remote"; exit 1; }; \
-	   git fetch --tags --quiet origin; \
-	 fi
-	@year=$$(date -u +%Y); month=$$(date -u +%m | sed 's/^0//'); \
-	  patch=$$(git tag -l "v$$year.$$month.*" | wc -l | tr -d ' '); \
-	  version="v$$year.$$month.$$patch"; \
-	  if git rev-parse -q --verify "refs/tags/$$version" >/dev/null; then \
-	    echo "release: tag $$version already exists"; exit 1; fi; \
-	  proj=$$(grep -E '^version *=' python/sciforge-build/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
-	  if [ "v$$proj" != "$$version" ]; then \
-	    echo "release: next tag is $$version but python/sciforge-build/pyproject.toml says $$proj -- bump it to $${version#v} and commit first (release.yml refuses the mismatch only after the tag is public)"; \
-	    exit 1; fi; \
-	  grep -qx "## $${version#v}" CHANGELOG.md || { echo "release: CHANGELOG.md has no '## $${version#v}' section -- describe the tag, contract changes included"; exit 1; }; \
-	  if [ -n "$(DRY_RUN)" ]; then echo "[dry-run] would tag and push $$version"; exit 0; fi; \
-	  echo "Releasing $$version"; \
-	  git tag "$$version"; \
-	  git push origin "$$version"
+# The calendar release (make/release.mk, the one every project cuts): vYYYY.M.PATCH, PATCH the count of the month's
+# tags. Pushing the tag also publishes sciforge-build to PyPI (release.yml), whose check-version job refuses a tag that
+# differs from python/sciforge-build/pyproject.toml: release-bump writes that version in the release commit, and the
+# tag is cut only on a commit whose CI and CI selftest are green.
+release-bump:
+	@test -n "$(VERSION)" || { echo "release-bump: VERSION= is required"; exit 1; }
+	@sed -i.bak -E "s/^version = \".*\"/version = \"$(VERSION)\"/" python/sciforge-build/pyproject.toml \
+	  && rm -f python/sciforge-build/pyproject.toml.bak
+
+RELEASE_FILES := python/sciforge-build/pyproject.toml
+RELEASE_CI    := ci.yml ci-selftest.yml
+include make/release.mk

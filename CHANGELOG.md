@@ -2,7 +2,8 @@
 
 All notable changes to SciForge, by tag. Versions are CalVer (`vYEAR.MONTH.PATCH`, the patch resetting each
 month). A change to what an existing name means is listed under **Contract changes** (see CONVENTIONS.md,
-"Versioning"); `make release` refuses a tag this file does not describe.
+"Versioning"). Changes are written under `## Unreleased` as they land; `make release` files that section under the
+version it cuts and refuses an empty one.
 
 ## Unreleased
 
@@ -19,7 +20,8 @@ month). A change to what an existing name means is listed under **Contract chang
   (`RELEASE_ADVISORY`, run in a dry run too, warning without blocking) and its version bump
   (`RELEASE_BUMP`, which may change only `RELEASE_FILES`); `CHANGELOG.md`'s non-empty `## Unreleased` filed under the
   version and annotating the tag; `DRY_RUN=1` rehearses all of it and restores the tree, as does any refusal before
-  the commit. `make release-selftest` cuts releases into a bare remote and provokes each refusal.
+  the commit. `make release-selftest` cuts releases into a bare remote and provokes each refusal. SciForge cuts its own
+  releases with it: the version of `sciforge-build` is now written by the release commit, and the tag is annotated.
 
 ### Contract changes
 - None.
