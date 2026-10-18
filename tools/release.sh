@@ -7,6 +7,8 @@
 #   RELEASE_NOTES      the notes file whose `## Unreleased` section the release takes (CHANGELOG.md)
 #   RELEASE_FILES      the files the version bump may change (besides the notes); one ending in / is a directory, all
 #                      of whose files it may change, add or remove
+#   RELEASE_TAG_BODY   a make target printing the tags' annotation, given VERSION= after the bump (a release's own notes
+#                      file); the notes' section by default
 #   RELEASE_EXTRA_TAGS a make target printing, one a line, tags to cut beside v<version> on the release commit (a Go
 #                      module's, …); given VERSION=
 #   RELEASE_BUMP       the project's make target that writes VERSION=<x> into them
@@ -31,6 +33,7 @@ die() { echo "release: $*" >&2; exit 1; }
 make_cmd=${RELEASE_MAKE:-make}
 notes=${RELEASE_NOTES:-CHANGELOG.md}
 extra_tags_target=${RELEASE_EXTRA_TAGS:-}
+tag_body_target=${RELEASE_TAG_BODY:-}
 files=${RELEASE_FILES:-}
 bump=${RELEASE_BUMP:-}
 precheck=${RELEASE_PRECHECK:-}
@@ -105,7 +108,12 @@ while read -r _ path; do
 done < <(git status --porcelain --untracked-files=all | sed -E 's/^(..) .* -> /\1 /')
 [ -z "$stray" ] || die "the bump changed files outside RELEASE_FILES:$stray"
 
-body=$(awk -v h="## $version " 'index($0,h)==1{f=1;print;next} f&&/^## /{exit} f{print}' "$notes")
+if [ -n "$tag_body_target" ]; then
+  body=$($make_cmd --no-print-directory -s "$tag_body_target" VERSION="$version") || die "'$tag_body_target' failed"
+else
+  body=$(awk -v h="## $version " 'index($0,h)==1{f=1;print;next} f&&/^## /{exit} f{print}' "$notes")
+fi
+[ -n "$(printf '%s' "$body" | tr -d '[:space:]')" ] || die "the tag's annotation is empty"
 extra=
 if [ -n "$extra_tags_target" ]; then
   extra=$($make_cmd --no-print-directory -s "$extra_tags_target" VERSION="$version") || die "'$extra_tags_target' failed"

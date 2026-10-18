@@ -4,6 +4,7 @@
 #   RELEASE_NOTES     the notes whose `## Unreleased` section the release takes (default: CHANGELOG.md)
 #   RELEASE_FILES     the files the version bump changes (besides the notes); one ending in / is a directory
 #   RELEASE_EXTRA_TAGS a target printing tags to cut beside v<version> (a Go module's), given VERSION=
+#   RELEASE_TAG_BODY  a target printing the tags' annotation after the bump, given VERSION= (default: the notes' section)
 #   RELEASE_BUMP      the project's target that writes VERSION=<x> into them (default: release-bump)
 #   RELEASE_PRECHECK  targets that must pass first, e.g. benchmarks against the last release (SKIP_PRECHECK=1 skips)
 #   RELEASE_ADVISORY  targets run in every mode, dry run included, that warn and never block
@@ -17,6 +18,7 @@ RELEASE_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))..)
 RELEASE_NOTES    ?= CHANGELOG.md
 RELEASE_FILES    ?=
 RELEASE_EXTRA_TAGS ?=
+RELEASE_TAG_BODY ?=
 RELEASE_BUMP     ?= release-bump
 RELEASE_PRECHECK ?=
 RELEASE_ADVISORY ?=
@@ -26,6 +28,6 @@ RELEASE_REMOTE   ?= origin
 .PHONY: release
 
 release: ## [release] Cut the calendar release (DRY_RUN=1 to rehearse, SKIP_PRECHECK=1 to skip the prechecks)
-	@RELEASE_MAKE="$(MAKE)" RELEASE_NOTES="$(RELEASE_NOTES)" RELEASE_FILES="$(RELEASE_FILES)" RELEASE_EXTRA_TAGS="$(RELEASE_EXTRA_TAGS)" RELEASE_BUMP="$(RELEASE_BUMP)" \
+	@RELEASE_MAKE="$(MAKE)" RELEASE_NOTES="$(RELEASE_NOTES)" RELEASE_FILES="$(RELEASE_FILES)" RELEASE_EXTRA_TAGS="$(RELEASE_EXTRA_TAGS)" RELEASE_TAG_BODY="$(RELEASE_TAG_BODY)" RELEASE_BUMP="$(RELEASE_BUMP)" \
 	 RELEASE_PRECHECK="$(RELEASE_PRECHECK)" RELEASE_ADVISORY="$(RELEASE_ADVISORY)" RELEASE_CI="$(RELEASE_CI)" RELEASE_REMOTE="$(RELEASE_REMOTE)" \
 	 DRY_RUN="$(DRY_RUN)" SKIP_PRECHECK="$(SKIP_PRECHECK)" bash $(RELEASE_DIR)/tools/release.sh

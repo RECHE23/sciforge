@@ -21,7 +21,8 @@ version it cuts and refuses an empty one.
   (`RELEASE_BUMP`, which may change only `RELEASE_FILES`); `CHANGELOG.md`'s non-empty `## Unreleased` filed under the
   version and annotating the tag; `DRY_RUN=1` rehearses all of it and restores the tree, as does any refusal before
   the commit; `RELEASE_NOTES` names another notes file, a directory in `RELEASE_FILES` (ending in `/`) lets the bump
-  write files there, and `RELEASE_EXTRA_TAGS` cuts tags beside `v<version>` (a bound module's). `make release-selftest`
+  write files there, `RELEASE_EXTRA_TAGS` cuts tags beside `v<version>` (a bound module's) and `RELEASE_TAG_BODY` prints their
+  annotation. `make release-selftest`
   cuts releases into a bare remote and provokes each refusal. SciForge cuts its own
   releases with it: the version of `sciforge-build` is now written by the release commit, and the tag is annotated.
 

@@ -91,12 +91,15 @@ SCIFORGE           := $here
 RELEASE_NOTES      := TRAINS.md
 RELEASE_FILES      := version.txt notes/
 RELEASE_EXTRA_TAGS := module-tag
+RELEASE_TAG_BODY   := tag-body
 RELEASE_CI         :=
 include \$(SCIFORGE)/make/release.mk
 release-bump:
 	@echo "\$(VERSION)" > version.txt; mkdir -p notes; echo "notes of \$(VERSION)" > notes/v\$(VERSION).md; \$(if \$(STRAY),echo x > elsewhere.txt,true)
 module-tag:
 	@echo "mod/v0.1.\$(word 3,\$(subst ., ,\$(VERSION)))"
+tag-body:
+	@cat notes/v\$(VERSION).md
 MK
 printf 'out.log\n' > .gitignore
 echo 0 > version.txt
@@ -113,6 +116,7 @@ rm -f elsewhere.txt; clean "a stray write beside a directory"
 expect "a release with a notes directory and an extra tag" 0 make --no-print-directory release
 git ls-files --error-unmatch "notes/v$year.$month.0.md" >/dev/null 2>&1 || { echo "FAIL: the new notes file was not committed"; fails=$((fails + 1)); }
 git cat-file -t "mod/v0.1.0" 2>/dev/null | grep -q tag || { echo "FAIL: extra tag not annotated"; fails=$((fails + 1)); }
+[ "$(git tag -l --format='%(contents)' "v$year.$month.0" | head -1)" = "notes of $year.$month.0" ] || { echo "FAIL: tag body not from RELEASE_TAG_BODY"; fails=$((fails + 1)); }
 git --git-dir="$work/remote2.git" rev-parse -q --verify "refs/tags/mod/v0.1.0" >/dev/null || { echo "FAIL: extra tag not pushed"; fails=$((fails + 1)); }
 grep -qx "## $year.$month.0 — $(date -u +%Y-%m-%d)" TRAINS.md || { echo "FAIL: the notes file's heading"; fails=$((fails + 1)); }
 clean "a release with a notes directory"
