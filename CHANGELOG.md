@@ -7,6 +7,8 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+## 2026.10.4 — 2026-10-18
+
 ### Added
 - **Verification tiers every project shares** (`make/quality.mk`, `tools/run-gate.sh`): `make check-commit`,
   `check-push` and `check-release` run the make targets a project lists in `QUALITY_COMMIT`, `QUALITY_PUSH` and
