@@ -4,6 +4,19 @@ All notable changes to SciForge, by tag. Versions are CalVer (`vYEAR.MONTH.PATCH
 month). A change to what an existing name means is listed under **Contract changes** (see CONVENTIONS.md,
 "Versioning"); `make release` refuses a tag this file does not describe.
 
+## Unreleased
+
+### Added
+- **Verification tiers every project shares** (`make/quality.mk`, `tools/run-gate.sh`): `make check-commit`,
+  `check-push` and `check-release` run the make targets a project lists in `QUALITY_COMMIT`, `QUALITY_PUSH` and
+  `QUALITY_RELEASE` (each tier adding to the one before), in order, fail-fast, each step timed, under one lock per
+  tree (a dead holder's lock reclaimed, a live one refused), and void if `HEAD` or the working tree moved while they
+  ran. `coverage-gate`, a step a project may list, requires llvm-cov's `TOTAL` at 100 % on every dimension. SciForge
+  runs its own tiers through them; `make quality-selftest` provokes each verdict in a scratch repository.
+
+### Contract changes
+- None.
+
 ## 2026.10.3
 
 ### Fixed

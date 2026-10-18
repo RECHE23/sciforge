@@ -20,11 +20,16 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest clean release help
+.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest clean release help
 
 PYTHON ?= python3
 
 include lint/misra.mk
+
+# The verification tiers every SciForge project shares (make/quality.mk), SciForge's own steps in them.
+QUALITY_COMMIT := format-check test quality-selftest
+QUALITY_PUSH   := lint lint-config framework-selftest bench-selftest corpus-selftest bench-cpp-selftest binding-selftest-gpp
+include make/quality.mk
 
 .DEFAULT_GOAL := help
 
@@ -41,6 +46,9 @@ help:
 	@echo "  make bench-selftest  Run the sciforge.bench substrate selftests (stats + schema)"
 	@echo "  make corpus-selftest Run the sciforge.corpus substrate selftests (schema + classify)"
 	@echo "  make bench-cpp-selftest  Build the C++ collector selftest (clang+g++) + Python round-trip"
+	@echo "  make quality-selftest  Self-test the verification tiers (tools/run-gate.sh, make/quality.mk)"
+	@echo "  make check-commit  Before each commit: format, self-tests, the tiers' own self-test"
+	@echo "  make check-push    Before each push: the above, lint, MISRA base, every self-test"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make release       Tag a calendar-versioned release and push (no PyPI)"
 	@echo "                     dry-run: make release DRY_RUN=1"
@@ -153,6 +161,11 @@ bench-cpp-selftest:
 	 done; \
 	 rm -f $(BUILD)/bench_emit $(BUILD)/bench_emit.out; \
 	 if [ $$status -eq 0 ]; then echo "bench-cpp-selftest: OK"; else echo "bench-cpp-selftest: FAIL"; exit 1; fi
+
+# Self-test the verification tiers that every project includes (tools/run-gate.sh through make/quality.mk):
+# each verdict provoked on purpose in a scratch repository (tools/test/run_gate_selftest.sh).
+quality-selftest:
+	@bash tools/test/run_gate_selftest.sh
 
 clean:
 	rm -rf $(BUILD)

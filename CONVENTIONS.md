@@ -63,6 +63,24 @@ themselves) take the same tag as the reusable-workflow jobs. Bump all of them to
 place and moves with them. `tools/check-pins.sh <repo>` reads all four and fails on more than one
 version; `--self-test` proves each form is read.
 
+## Verification tiers (`make/quality.mk`)
+
+Every project verifies its changes in three tiers, from the same mechanism: `include $(SCIFORGE)/make/quality.mk`
+in its Makefile, after listing its own make targets in three variables.
+
+- `make check-commit` — before each commit (`QUALITY_COMMIT`): the quick checks, a couple of minutes at most —
+  formatting, the test suite under coverage (`coverage-gate`, 100 % on every dimension), what the commit cannot
+  break unseen.
+- `make check-push` — before each push: the commit tier, then `QUALITY_PUSH` — every compiler, the sanitizers,
+  lint, MISRA, the documentation build, the bindings' suites.
+- `make check-release` — before each release: both, then `QUALITY_RELEASE` — benchmarks against the last release,
+  long fuzzing campaigns, the external oracles.
+
+A step is a make target (one that needs arguments is a target of its own, so that `make <step>` reproduces it).
+The tiers run fail-fast and print each step's time; they take one lock per tree and refuse a second gate while the
+first lives, and a gate whose `HEAD` or working tree moved while it ran reports its verdict void. A check moves
+between tiers when its cost or its catch rate says so; none leaves every tier without the maintainer's word.
+
 ## Versioning and the `sciforge-build` floor
 
 - SciForge follows **CalVer** (`vYEAR.MONTH.PATCH`; the patch resets each month). A tag is infra-only
