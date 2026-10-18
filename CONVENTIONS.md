@@ -92,6 +92,9 @@ be green on the commit tagged (`RELEASE_CI`, default `CI`). `CHANGELOG.md` keeps
 top, written as the work lands; `make release` refuses an empty one, files it under `## <version> — <date>`,
 annotates the tag with it, commits the bump as `release: v<version>` and pushes both. `make release DRY_RUN=1`
 rehearses every step and leaves the tree as it found it. The maintainer runs `make release`: publishing is theirs.
+A project whose notes are not `CHANGELOG.md` names them (`RELEASE_NOTES`); a directory in `RELEASE_FILES` (ending in
+`/`) lets the bump write files there, a release's own notes say; `RELEASE_EXTRA_TAGS` names a target that prints tags
+to cut beside `v<version>` on the release commit, a bound module's.
 
 ## Versioning and the `sciforge-build` floor
 

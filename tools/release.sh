@@ -4,7 +4,11 @@
 #
 # Driven by make/release.mk, which passes the project's settings in the environment:
 #   RELEASE_MAKE       the make to run the project's targets with
-#   RELEASE_FILES      the files the version bump may change (besides CHANGELOG.md)
+#   RELEASE_NOTES      the notes file whose `## Unreleased` section the release takes (CHANGELOG.md)
+#   RELEASE_FILES      the files the version bump may change (besides the notes); one ending in / is a directory, all
+#                      of whose files it may change, add or remove
+#   RELEASE_EXTRA_TAGS a make target printing, one a line, tags to cut beside v<version> on the release commit (a Go
+#                      module's, …); given VERSION=
 #   RELEASE_BUMP       the project's make target that writes VERSION=<x> into them
 #   RELEASE_PRECHECK   make targets that must pass first (benchmarks against the last release, …); skipped by
 #                      SKIP_PRECHECK=1 and by a dry run
@@ -15,8 +19,8 @@
 #   DRY_RUN            1: every guard and the bump, the tag body shown, then the tree restored — nothing committed,
 #                      tagged or pushed
 #
-# CHANGELOG.md keeps a `## Unreleased` section at its top; a release refuses an empty one, files its entries under
-# `## <version> — <date>` and leaves `## Unreleased` above, empty. The tag is annotated with that section.
+# The notes keep a `## Unreleased` section at their top; a release refuses an empty one, files its entries under
+# `## <version> — <date>` and leaves `## Unreleased` above, empty. The tags are annotated with that section.
 #
 # The tree is restored on any exit before the commit (a failed bump, a refused guard, an interrupted dry run): it
 # was clean when the release began, so every tracked change is the release's own.
@@ -25,6 +29,8 @@ set -u
 die() { echo "release: $*" >&2; exit 1; }
 
 make_cmd=${RELEASE_MAKE:-make}
+notes=${RELEASE_NOTES:-CHANGELOG.md}
+extra_tags_target=${RELEASE_EXTRA_TAGS:-}
 files=${RELEASE_FILES:-}
 bump=${RELEASE_BUMP:-}
 precheck=${RELEASE_PRECHECK:-}
@@ -34,7 +40,7 @@ remote=${RELEASE_REMOTE:-origin}
 dry=${DRY_RUN:-}
 
 [ -n "$bump" ] || die "RELEASE_BUMP names no target (the one that writes the version into RELEASE_FILES)"
-[ -f CHANGELOG.md ] || die "no CHANGELOG.md here"
+[ -f "$notes" ] || die "no $notes here"
 branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
 [ "$branch" = main ] || die "release from main only (on '${branch:-a detached HEAD}')"
 [ -z "$(git status --porcelain)" ] || die "the working tree is not clean"
@@ -66,41 +72,61 @@ patch=$(git tag -l "v$year.$month.*" | wc -l | tr -d ' ')
 version="$year.$month.$patch"
 git rev-parse -q --verify "refs/tags/v$version" >/dev/null && die "tag v$version already exists"
 
-awk '/^## Unreleased$/{f=1;next} f&&/^## /{exit 1} f&&NF{found=1;exit 0} END{if(!found)exit 1}' CHANGELOG.md \
-  || die "'## Unreleased' in CHANGELOG.md is empty or missing: describe the release first"
+awk '/^## Unreleased$/{f=1;next} f&&/^## /{exit 1} f&&NF{found=1;exit 0} END{if(!found)exit 1}' "$notes" \
+  || die "'## Unreleased' in $notes is empty or missing: describe the release first"
 
 committed=
 restore() {
   [ -n "$committed" ] && return
   git checkout -- . 2>/dev/null || true
-  rm -f CHANGELOG.md.tmp
+  git clean -fdq -- $files 2>/dev/null || true
+  rm -f "$notes.tmp"
 }
 trap restore EXIT HUP INT PIPE TERM
 
 echo "Releasing v$version ($today)${dry:+  [DRY_RUN — no commit, tag or push]}"
-awk -v v="$version" -v d="$today" '/^## Unreleased$/{print; print ""; print "## " v " — " d; next} {print}' CHANGELOG.md \
-  > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+awk -v v="$version" -v d="$today" '/^## Unreleased$/{print; print ""; print "## " v " — " d; next} {print}' "$notes" \
+  > "$notes.tmp" && mv "$notes.tmp" "$notes"
 $make_cmd --no-print-directory "$bump" VERSION="$version" || die "the bump '$bump' failed"
 
-allowed=" CHANGELOG.md $files "
+allowed() { # whether the bump may change $1: the notes, a listed file, or a file under a listed directory
+  local entry
+  for entry in "$notes" $files; do
+    case "$entry" in
+      */) case "$1" in "$entry"*) return 0 ;; esac ;;
+      *) [ "$1" = "$entry" ] && return 0 ;;
+    esac
+  done
+  return 1
+}
 stray=
 while read -r _ path; do
-  case "$allowed" in *" $path "*) ;; *) stray="$stray $path" ;; esac
-done < <(git status --porcelain --untracked-files=all)
+  allowed "$path" || stray="$stray $path"
+done < <(git status --porcelain --untracked-files=all | sed -E 's/^(..) .* -> /\1 /')
 [ -z "$stray" ] || die "the bump changed files outside RELEASE_FILES:$stray"
 
-body=$(awk -v h="## $version " 'index($0,h)==1{f=1;print;next} f&&/^## /{exit} f{print}' CHANGELOG.md)
+body=$(awk -v h="## $version " 'index($0,h)==1{f=1;print;next} f&&/^## /{exit} f{print}' "$notes")
+extra=
+if [ -n "$extra_tags_target" ]; then
+  extra=$($make_cmd --no-print-directory -s "$extra_tags_target" VERSION="$version") || die "'$extra_tags_target' failed"
+fi
+for tag in $extra; do
+  git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "tag $tag already exists"
+done
 if [ -n "$dry" ]; then
-  echo "would commit 'release: v$version' (CHANGELOG.md $files) and tag v$version, its body:"
+  echo "would commit 'release: v$version' ($notes $files) and tag v$version${extra:+ and $(echo $extra)}, its body:"
   printf '%s\n' "$body" | sed 's/^/    | /'
-  echo "would push HEAD and v$version to $remote"
+  echo "would push HEAD and v$version${extra:+ $(echo $extra)} to $remote"
   exit 0
 fi
 
 # shellcheck disable=SC2086 # the files are a list
-git add CHANGELOG.md $files || die "git add failed"
+git add -A -- "$notes" $files || die "git add failed"
 git commit -q -m "release: v$version" || die "the release commit failed"
 committed=1
-printf '%s\n' "$body" | git tag -a --cleanup=verbatim "v$version" -F - || die "tagging v$version failed (the release commit is local, not pushed)"
-git push "$remote" HEAD "v$version" || die "the push failed: commit and tag v$version are local; push them by hand"
-echo "release: v$version pushed"
+for tag in "v$version" $extra; do
+  printf '%s\n' "$body" | git tag -a --cleanup=verbatim "$tag" -F - || die "tagging $tag failed (the release commit is local, not pushed)"
+done
+# shellcheck disable=SC2086 # the extra tags are a list
+git push "$remote" HEAD "v$version" $extra || die "the push failed: the commit and tags are local; push them by hand"
+echo "release: v$version${extra:+ and $(echo $extra)} pushed"
