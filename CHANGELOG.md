@@ -12,7 +12,7 @@ version it cuts and refuses an empty one.
   `check-push` and `check-release` run the make targets a project lists in `QUALITY_COMMIT`, `QUALITY_PUSH` and
   `QUALITY_RELEASE` (each tier adding to the one before), in order, fail-fast, each step timed, under one lock per
   tree (a dead holder's lock reclaimed, a live one refused), and void if `HEAD` or the working tree moved while they
-  ran. `coverage-gate`, a step a project may list, requires llvm-cov's `TOTAL` at 100 % on every dimension. SciForge
+  ran; `QUALITY_FIRST` and `QUALITY_LAST` run at every tier's start and end. `coverage-gate`, a step a project may list, requires llvm-cov's `TOTAL` at 100 % on every dimension. SciForge
   runs its own tiers through them; `make quality-selftest` provokes each verdict in a scratch repository.
 - **The calendar release every project cuts the same way** (`make/release.mk`, `tools/release.sh`): `vYEAR.MONTH.PATCH`,
   from `main` with a clean tree and, by default, a green `CI` run on `HEAD` (the tag is what publishes); the project's

@@ -76,7 +76,8 @@ in its Makefile, after listing its own make targets in three variables.
 - `make check-release` — before each release: both, then `QUALITY_RELEASE` — benchmarks against the last release,
   long fuzzing campaigns, the external oracles.
 
-A step is a make target (one that needs arguments is a target of its own, so that `make <step>` reproduces it).
+A step is a make target (one that needs arguments is a target of its own, so that `make <step>` reproduces it);
+`QUALITY_FIRST` and `QUALITY_LAST` run at the start and the end of every tier.
 The tiers run fail-fast and print each step's time; they take one lock per tree and refuse a second gate while the
 first lives, and a gate whose `HEAD` or working tree moved while it ran reports its verdict void. A check moves
 between tiers when its cost or its catch rate says so; none leaves every tier without the maintainer's word.

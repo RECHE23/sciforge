@@ -14,9 +14,11 @@ SCIFORGE := $here
 QUALITY_COMMIT   := ok-a
 QUALITY_PUSH     := ok-b
 QUALITY_RELEASE  := ok-c
+QUALITY_FIRST    := first
+QUALITY_LAST     := last
 QUALITY_COVERAGE := fake-coverage
 include \$(SCIFORGE)/make/quality.mk
-ok-a ok-b ok-c:
+ok-a ok-b ok-c first last:
 	@echo "ran \$@" >> order.log
 red:
 	@echo "ran red" >> order.log; exit 3
@@ -66,10 +68,13 @@ expect "a usage error" 2 gate t build make
 
 rm -f order.log
 expect "check-release runs every tier in order" 0 make --no-print-directory check-release
-[ "$(cat order.log)" = "$(printf 'ran ok-a\nran ok-b\nran ok-c')" ] || { echo "FAIL: tier order"; cat order.log; fails=$((fails + 1)); }
+[ "$(cat order.log)" = "$(printf 'ran first\nran ok-a\nran ok-b\nran ok-c\nran last')" ] || { echo "FAIL: tier order"; cat order.log; fails=$((fails + 1)); }
 rm -f order.log
 expect "check-push runs commit then push steps" 0 make --no-print-directory check-push
-[ "$(cat order.log)" = "$(printf 'ran ok-a\nran ok-b')" ] || { echo "FAIL: push order"; fails=$((fails + 1)); }
+[ "$(cat order.log)" = "$(printf 'ran first\nran ok-a\nran ok-b\nran last')" ] || { echo "FAIL: push order"; fails=$((fails + 1)); }
+rm -f order.log
+expect "check-commit runs first, commit, last" 0 make --no-print-directory check-commit
+[ "$(cat order.log)" = "$(printf 'ran first\nran ok-a\nran last')" ] || { echo "FAIL: commit order"; fails=$((fails + 1)); }
 expect "coverage-gate passes at 100 %" 0 make --no-print-directory coverage-gate LINES=100.00% SUITE=0
 expect "coverage-gate fails when the suite fails at 100 % (make: 2)" 2 make --no-print-directory coverage-gate LINES=100.00% SUITE=1
 expect "coverage-gate fails below 100 % (make: 2)" 2 make --no-print-directory coverage-gate LINES=99.98% SUITE=0
