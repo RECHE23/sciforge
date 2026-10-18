@@ -75,7 +75,7 @@ restore() {
   git checkout -- . 2>/dev/null || true
   rm -f CHANGELOG.md.tmp
 }
-trap restore EXIT INT TERM
+trap restore EXIT HUP INT PIPE TERM
 
 echo "Releasing v$version ($today)${dry:+  [DRY_RUN — no commit, tag or push]}"
 awk -v v="$version" -v d="$today" '/^## Unreleased$/{print; print ""; print "## " v " — " d; next} {print}' CHANGELOG.md \
