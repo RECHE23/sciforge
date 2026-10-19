@@ -14,6 +14,12 @@
 # checkout of RECHE23/sciforge with no `ref:` — since it moves with SciForge's default branch, and on a
 # pyproject `sciforge-build>=FLOOR` above the pinned version, which no build the pins describe meets.
 #
+# And it fails when the SciForge checkout it runs from (the sibling whose make/, lint/ and tools/ the consumer's
+# Makefile reads) is not the pinned version, exactly and unmodified: a local gate would then run what no CI run of
+# the pins does, and a consumer could come to rely on SciForge work no release has. SCIFORGE_UNPINNED_OK=1 turns
+# that one into a warning, to work on SciForge and a consumer together; outside a git checkout it is skipped.
+# SCIFORGE_CHECKOUT names another checkout to judge.
+#
 # Usage: check-pins.sh [REPO_ROOT]   (default: current directory)
 #        check-pins.sh --self-test   (drives each form alone against a fixture repo)
 set -euo pipefail
@@ -117,8 +123,34 @@ check() {
       fi
     done <<< "$floors"
   fi
+  sibling "$root" "$versions" || return 1
   echo "check-pins: OK — SciForge pinned at $versions across $(printf '%s\n' "$pins" | grep -c .) site(s) under $root"
   return 0
+}
+
+# Judge the SciForge checkout this script runs from (or SCIFORGE_CHECKOUT) against the version $2 that $1 pins.
+sibling() {
+  local root="$1" version="$2" checkout at
+  checkout="${SCIFORGE_CHECKOUT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+  if [ ! -d "$checkout" ] || [ "$(cd "$root" && pwd -P)" = "$(cd "$checkout" && pwd -P)" ] \
+     || ! git -C "$checkout" rev-parse --git-dir > /dev/null 2>&1; then
+    return 0 # SciForge judging its own pins, or a checkout without its history
+  fi
+  at="$(git -C "$checkout" describe --tags --exact-match HEAD 2> /dev/null || git -C "$checkout" describe --tags --always 2> /dev/null)"
+  if [ -n "$(git -C "$checkout" status --porcelain --untracked-files=no 2> /dev/null)" ]; then
+    at="$at, modified"
+  fi
+  if [ "$at" = "$version" ]; then
+    return 0
+  fi
+  if [ "${SCIFORGE_UNPINNED_OK:-0}" = 1 ]; then
+    echo "check-pins: warning — the SciForge checkout $checkout is at $at, the pins name $version (SCIFORGE_UNPINNED_OK=1)"
+    return 0
+  fi
+  echo "check-pins: SIBLING — the SciForge checkout $checkout is at $at, the pins name $version: check it out at"
+  echo "  $version (git -C $checkout checkout $version), or pin the release it is, or set SCIFORGE_UNPINNED_OK=1 to"
+  echo "  work on both together"
+  return 1
 }
 
 # Each drift case pins v1.0.0 through a `uses:` line and ONE other form at v2.0.0, so exactly that form
@@ -127,6 +159,15 @@ check() {
 self_test() {
   local tmp failures=0 base
   tmp="$(mktemp -d)"
+  # The checkout every case is judged against: a repository at v1.0.0, the version the cases agree on.
+  git init -q "$tmp/sf"
+  git -C "$tmp/sf" -c user.name=t -c user.email=t@t commit -q --allow-empty -m one
+  git -C "$tmp/sf" tag v1.0.0
+  printf 'x\n' > "$tmp/sf/tracked"
+  git -C "$tmp/sf" add tracked
+  git -C "$tmp/sf" -c user.name=t -c user.email=t@t commit -q -m tracked
+  git -C "$tmp/sf" tag -f v1.0.0 > /dev/null
+  export SCIFORGE_CHECKOUT="$tmp/sf"
   base='jobs:
   build:
     uses: RECHE23/sciforge/.github/workflows/build-cpp.yml@v1.0.0
@@ -243,12 +284,24 @@ requires = ["sciforge-build>=1.0.0"]
   expect "CMake tag drift (cmake/ module)" drift "v2\\.0\\.0 .*\\(cmake\\)" \
     .github/workflows/ci.yml "$base" cmake/deps.cmake 'set(SCIFORGE_TAG v2.0.0)
 '
+  # The checkout itself: ahead of the pinned tag, modified, allowed, or no repository at all.
+  local agreeing=".github/workflows/ci.yml"
+  git -C "$tmp/sf" -c user.name=t -c user.email=t@t commit -q --allow-empty -m ahead
+  expect "a checkout ahead of the pin" sibling "is at v1\.0\.0-1-g[0-9a-f]+, the pins name v1\.0\.0" "$agreeing" "$base"
+  SCIFORGE_UNPINNED_OK=1 expect "a checkout ahead, allowed" ok "warning" "$agreeing" "$base"
+  git -C "$tmp/sf" reset -q --hard v1.0.0
+  printf 'y\n' > "$tmp/sf/tracked"
+  expect "a modified checkout at the pin" sibling "is at v1\.0\.0, modified" "$agreeing" "$base"
+  git -C "$tmp/sf" checkout -q -- tracked
+  expect "a checkout at the pin" ok "OK" "$agreeing" "$base"
+  mkdir -p "$tmp/no-repo"
+  SCIFORGE_CHECKOUT="$tmp/no-repo" expect "no checkout history" ok "OK" "$agreeing" "$base"
   rm -rf "$tmp"
   if [ "$failures" -ne 0 ]; then
     echo "check-pins: self-test FAILED ($failures case(s))"
     return 1
   fi
-  echo "check-pins: self-test OK — uses, sciforge-ref, checkout (either order), CMake list file and module each drift on their own; a foreign checkout's ref is not attributed; a quoted value is read; a branch, a commit or a missing ref is unpinned; a floor above the pin fails"
+  echo "check-pins: self-test OK — uses, sciforge-ref, checkout (either order), CMake list file and module each drift on their own; a foreign checkout's ref is not attributed; a quoted value is read; a branch, a commit or a missing ref is unpinned; a floor above the pin fails; a checkout ahead of the pin or modified fails, unless allowed"
 }
 
 if [ "${1:-}" = "--self-test" ]; then

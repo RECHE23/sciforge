@@ -8,6 +8,13 @@ version it cuts and refuses an empty one.
 ## Unreleased
 
 ### Added
+- **`check-pins.sh` judges the SciForge checkout it runs from**: the sibling whose `make/`, `lint/` and `tools/` a
+  consumer's Makefile reads must be the version the consumer pins, exactly and unmodified, or the check fails
+  (`SIBLING`), naming both and the checkout that agrees. A local gate otherwise ran what no CI run of the pins
+  does, and the four consumers came to rely on `RELEASE_CI_IGNORED` before any release had it.
+  `SCIFORGE_UNPINNED_OK=1` makes it a warning, to work on SciForge and a consumer together; outside a git checkout
+  it is skipped; `SCIFORGE_CHECKOUT` names another checkout. The self-test drives each case (ahead, modified,
+  allowed, at the pin, no history), each failing alone with its arm removed.
 - **`RELEASE_CI_IGNORED`** (`make/release.mk`): the paths the release's workflows skip, as globs (their
   `paths-ignore`, such as `*.md docs/*`). A HEAD they did not run on, changed in those paths alone since their last
   run, is judged by that run: a CHANGELOG commit no longer stops a release. A workflow that did not run otherwise is

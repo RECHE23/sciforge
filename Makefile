@@ -20,14 +20,14 @@ endif
 # CMake builds land there too) — those are not ours to format.
 FORMAT_FILES := $(shell find include tests examples -name build -prune -o \( -name '*.hpp' -o -name '*.cpp' \) -print)
 
-.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest release-selftest clean release release-bump help
+.PHONY: all build test format format-check lint lint-binding lint-config binding-selftest-gpp bench-selftest corpus-selftest framework-selftest bench-cpp-selftest quality-selftest release-selftest pins-selftest clean release release-bump help
 
 PYTHON ?= python3
 
 include lint/misra.mk
 
 # The verification tiers every SciForge project shares (make/quality.mk), SciForge's own steps in them.
-QUALITY_COMMIT := format-check test quality-selftest release-selftest
+QUALITY_COMMIT := format-check test quality-selftest release-selftest pins-selftest
 QUALITY_PUSH   := lint lint-config framework-selftest bench-selftest corpus-selftest bench-cpp-selftest binding-selftest-gpp
 include make/quality.mk
 
@@ -172,6 +172,11 @@ quality-selftest:
 # pushed to a bare remote, and each refusal, in a scratch repository (tools/test/release_selftest.sh).
 release-selftest:
 	@bash tools/test/release_selftest.sh
+
+# Self-test the pin lint every consumer runs (tools/check-pins.sh): each form of pin, each drift, the checkout it runs
+# from, in fixture repositories.
+pins-selftest:
+	@bash tools/check-pins.sh --self-test
 
 clean:
 	rm -rf $(BUILD)
