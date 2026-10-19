@@ -7,6 +7,8 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+## 2026.10.5 — 2026-10-19
+
 ### Added
 - **`check-pins.sh` judges the SciForge checkout it runs from**: the sibling whose `make/`, `lint/` and `tools/` a
   consumer's Makefile reads must be the version the consumer pins, exactly and unmodified, or the check fails
