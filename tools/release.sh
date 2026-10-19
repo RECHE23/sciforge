@@ -17,6 +17,9 @@
 #   RELEASE_ADVISORY   make targets run in every mode, dry run included, whose failure warns and never blocks
 #                      (benchmarks stamped against another version of a dependency, …)
 #   RELEASE_CI         workflows whose run on HEAD must have succeeded (the tag publishes): none checked if empty
+#   RELEASE_CI_IGNORED the paths those workflows skip (their paths-ignore, as globs: '*.md docs/*'): a HEAD they did not
+#                      run on is judged by their run on the newest commit before it they ran on, where every path
+#                      changed since matches one of these
 #   RELEASE_REMOTE     the remote to push to (origin)
 #   DRY_RUN            1: every guard and the bump, the tag body shown, then the tree restored — nothing committed,
 #                      tagged or pushed
@@ -39,6 +42,7 @@ bump=${RELEASE_BUMP:-}
 precheck=${RELEASE_PRECHECK:-}
 advisory=${RELEASE_ADVISORY:-}
 workflows=${RELEASE_CI:-}
+ignored=${RELEASE_CI_IGNORED:-}
 remote=${RELEASE_REMOTE:-origin}
 dry=${DRY_RUN:-}
 
@@ -48,12 +52,42 @@ branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
 [ "$branch" = main ] || die "release from main only (on '${branch:-a detached HEAD}')"
 [ -z "$(git status --porcelain)" ] || die "the working tree is not clean"
 
+ci_state() { # the state of workflow $1's run on commit $2: success, failure, in_progress, …, or "not run"
+  gh run list --workflow "$1" --commit "$2" --json status,conclusion \
+    --jq '.[0] | if . == null then "not run" elif .status != "completed" then .status else .conclusion end' 2>/dev/null
+}
+
+only_ignored() { # whether every path changed from commit $1 to HEAD matches one of RELEASE_CI_IGNORED's globs
+  local path pattern hit
+  local -a patterns
+  read -r -a patterns <<< "$ignored" # split, never expanded against the tree
+  while IFS= read -r path; do
+    hit=
+    for pattern in "${patterns[@]}"; do
+      # shellcheck disable=SC2254 # a glob on purpose
+      case "$path" in $pattern) hit=1; break ;; esac
+    done
+    [ -n "$hit" ] || return 1
+  done < <(git diff --name-only "$1" HEAD)
+}
+
 head=$(git rev-parse HEAD)
 for workflow in $workflows; do
-  state=$(gh run list --workflow "$workflow" --commit "$head" --json status,conclusion \
-            --jq '.[0] | if . == null then "not run" elif .status != "completed" then .status else .conclusion end' 2>/dev/null) \
-    || die "could not read workflow '$workflow' on $head (gh)"
-  [ "$state" = success ] || die "workflow '$workflow' is '$state' on $head: tag only a commit whose CI is green"
+  state=$(ci_state "$workflow" "$head") || die "could not read workflow '$workflow' on $head (gh)"
+  if [ "$state" = "not run" ] && [ -n "$ignored" ]; then # a change the workflow skips: its run before it decides
+    for commit in $(git rev-list --first-parent --max-count=100 "$head^" 2>/dev/null); do
+      earlier=$(ci_state "$workflow" "$commit") || die "could not read workflow '$workflow' on $commit (gh)"
+      [ "$earlier" = "not run" ] && continue
+      if only_ignored "$commit"; then
+        echo "release: '$workflow' did not run on $head, changed since $commit in RELEASE_CI_IGNORED's paths alone; there it is '$earlier'"
+        state=$earlier
+      fi
+      break
+    done
+  fi
+  hint=
+  [ "$state" = "not run" ] && hint=" (gh workflow run $workflow --ref $branch runs it)"
+  [ "$state" = success ] || die "workflow '$workflow' is '$state' on $head: tag only a commit whose CI is green$hint"
 done
 [ -n "$dry" ] || git fetch --tags --quiet "$remote" || die "could not fetch the tags from '$remote'"
 

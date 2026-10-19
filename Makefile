@@ -187,4 +187,5 @@ release-bump:
 
 RELEASE_FILES := python/sciforge-build/pyproject.toml
 RELEASE_CI    := ci.yml ci-selftest.yml
+RELEASE_CI_IGNORED := *.md
 include make/release.mk

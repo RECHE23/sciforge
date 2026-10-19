@@ -7,6 +7,12 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+### Added
+- **`RELEASE_CI_IGNORED`** (`make/release.mk`): the paths the release's workflows skip, as globs (their
+  `paths-ignore`, such as `*.md docs/*`). A HEAD they did not run on, changed in those paths alone since their last
+  run, is judged by that run: a CHANGELOG commit no longer stops a release. A workflow that did not run otherwise is
+  refused with the command that runs it (`gh workflow run`).
+
 ### Changed
 - **The Releases page carries the tag's annotation** (`release.yml`): the CHANGELOG section `make release` annotates the
   tag with, before a `docs/release-notes/<tag>.md` and the list of commits it fell back to.

@@ -121,5 +121,50 @@ git --git-dir="$work/remote2.git" rev-parse -q --verify "refs/tags/mod/v0.1.0" >
 grep -qx "## $year.$month.0 — $(date -u +%Y-%m-%d)" TRAINS.md || { echo "FAIL: the notes file's heading"; fails=$((fails + 1)); }
 clean "a release with a notes directory"
 
+# CI on HEAD: a stub gh answers each commit's state from ci-states (absent: "not run"); a HEAD the workflow skipped is
+# judged by its run before it only where the change since is in RELEASE_CI_IGNORED's paths.
+mkdir -p "$work/bin"
+cat > "$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+commit=
+while [ "$#" -gt 0 ]; do [ "$1" = --commit ] && commit=$2; shift; done
+state=$(awk -v c="$commit" '$1 == c {print $2}' "$CI_STATES" 2>/dev/null)
+echo "${state:-not run}"
+GH
+chmod +x "$work/bin/gh"
+git init -q --bare "$work/remote3.git"
+git init -q "$work/repo3" && cd "$work/repo3" && git checkout -q -b main 2>/dev/null
+git config user.email t@t && git config user.name t
+git remote add origin "$work/remote3.git"
+cat > Makefile <<MK
+SCIFORGE           := $here
+RELEASE_FILES      := version.txt
+RELEASE_CI         := ci.yml
+RELEASE_CI_IGNORED := \$(if \$(NO_IGNORED),,*.md docs/*)
+include \$(SCIFORGE)/make/release.mk
+release-bump:
+	@echo "\$(VERSION)" > version.txt
+MK
+printf 'out.log\nci-states\n' > .gitignore
+echo 0 > version.txt
+printf '# Changelog\n\n## Unreleased\n\n- a change.\n' > CHANGELOG.md
+git add -A && git commit -q -m code && git push -q origin main
+green=$(git rev-parse HEAD)
+export CI_STATES="$work/repo3/ci-states"
+echo "$green success" > "$CI_STATES"
+mkdir -p docs && echo notes > docs/guide.md && echo more >> CHANGELOG.md
+git add -A && git commit -q -m docs
+expect "a HEAD changed in the skipped paths alone, after a green run" 0 env PATH="$work/bin:$PATH" make --no-print-directory release DRY_RUN=1
+grep -q "did not run on" out.log || { echo "FAIL: the run before HEAD not named"; fails=$((fails + 1)); }
+clean "a dry run judged by the run before HEAD"
+expect "the same without RELEASE_CI_IGNORED is refused" 2 env PATH="$work/bin:$PATH" make --no-print-directory release DRY_RUN=1 NO_IGNORED=1
+grep -q "gh workflow run ci.yml" out.log || { echo "FAIL: no hint to run the workflow"; fails=$((fails + 1)); }
+echo "$green failure" > "$CI_STATES"
+expect "a skipped HEAD after a red run is refused" 2 env PATH="$work/bin:$PATH" make --no-print-directory release DRY_RUN=1
+echo "$green success" > "$CI_STATES"
+echo changed > version.txt && git add -A && git commit -q -m code-again
+expect "a HEAD the workflow skipped though code changed is refused" 2 env PATH="$work/bin:$PATH" make --no-print-directory release DRY_RUN=1
+clean "refusals on CI"
+
 if [ "$fails" -ne 0 ]; then echo "release selftest: $fails FAILED"; exit 1; fi
 echo "release selftest: OK"
