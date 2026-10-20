@@ -7,6 +7,8 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+## 2026.10.6 — 2026-10-20
+
 ### Added
 - **`docs/adopting.md`**: how a project takes up the verification tiers (`make/quality.mk`), the calendar release
   (`make/release.mk`) and the pin check (`tools/check-pins.sh`) together, in the order it needs them, with what each
