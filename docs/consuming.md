@@ -40,3 +40,5 @@ requires = ["sciforge-build>=2026.7.0"]
 
 A floor picks up a compatible fix without a lockstep release; the backend stays backward-compatible
 within a CalVer line.
+
+To take up the verification tiers, the calendar release and the pin check, see [Adopting SciForge's gates, releases and pins](adopting.md).

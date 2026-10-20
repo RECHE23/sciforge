@@ -100,7 +100,8 @@ annotation (a release's own notes file), the notes' section by default.
 ## Versioning and the `sciforge-build` floor
 
 - SciForge follows **CalVer** (`vYEAR.MONTH.PATCH`; the patch resets each month). A tag is infra-only
-  unless it changes a published artefact.
+  unless it changes a published artefact. A change goes out when it is ready: since a contract change takes a new
+  name (below), nothing SciForge releases breaks its consumers, so nothing waits for a month's first release.
 - Consumers pin the `sciforge-build` backend with a **floor, never an exact pin**: `sciforge-build>=X`,
   not `==X`. A floor lets a consumer pick up a compatible fix without a lockstep release; SciForge keeps
   the build backend backward-compatible within a CalVer line.

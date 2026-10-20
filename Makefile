@@ -189,8 +189,9 @@ release-bump:
 	@test -n "$(VERSION)" || { echo "release-bump: VERSION= is required"; exit 1; }
 	@sed -i.bak -E "s/^version = \".*\"/version = \"$(VERSION)\"/" python/sciforge-build/pyproject.toml \
 	  && rm -f python/sciforge-build/pyproject.toml.bak
+	@sed -i.bak -E "s/(GIT_TAG +)v[0-9]+\.[0-9]+\.[0-9]+\)/\1v$(VERSION))/" README.md && rm -f README.md.bak
 
-RELEASE_FILES := python/sciforge-build/pyproject.toml
+RELEASE_FILES := python/sciforge-build/pyproject.toml README.md
 RELEASE_CI    := ci.yml ci-selftest.yml
 RELEASE_CI_IGNORED := *.md
 include make/release.mk

@@ -7,6 +7,17 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+### Added
+- **`docs/adopting.md`**: how a project takes up the verification tiers (`make/quality.mk`), the calendar release
+  (`make/release.mk`) and the pin check (`tools/check-pins.sh`) together, in the order it needs them, with what each
+  variable is for and how a consumer raises its pin after a release.
+- **Issue forms** (`.github/ISSUE_TEMPLATE/`): a bug report (version, platform, the smallest reproduction, what was
+  expected), a feature request, and security issues sent to private reporting.
+
+### Changed
+- **The README's `FetchContent` example names the release that published it**: `release-bump` writes the new tag into
+  its `GIT_TAG` line (`README.md` joins `RELEASE_FILES`), where it had stayed at `v2026.9.0` across five releases.
+
 ## 2026.10.5 — 2026-10-19
 
 ### Added

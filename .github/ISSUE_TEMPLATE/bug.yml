@@ -1,0 +1,38 @@
+name: Bug report
+description: A wrong answer, a crash, a hang, or a build that fails.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for the report. A security issue goes through private reporting instead (see SECURITY.md), not here.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The SciForge release (`pip show sciforge-build`, or the git tag or commit).
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Operating system, processor, compiler and its version (or the Python version and the wheel).
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: The smallest example that shows it — the consumer repository (or a minimal one), the target or workflow input, and what you expected.
+      render: text
+      placeholder: |
+        make check-commit
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened
+    validations:
+      required: true
