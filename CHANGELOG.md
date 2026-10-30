@@ -7,6 +7,8 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+## 2026.10.7 — 2026-10-30
+
 ### Added
 - **The binding runs without the GIL on a free-threaded CPython** (3.14t, 3.15t: `Py_GIL_DISABLED`): `SCIFORGE_MODULE`
   declares it (`PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED)`), where the interpreter re-enabled the GIL for

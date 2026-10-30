@@ -35,7 +35,7 @@ CalVer tag from the remote, no on-disk-layout assumption:
 include(FetchContent)
 FetchContent_Declare(sciforge
     GIT_REPOSITORY https://github.com/RECHE23/sciforge.git
-    GIT_TAG        v2026.10.6)   # the release that published this README (each release writes its own tag here)
+    GIT_TAG        v2026.10.7)   # the release that published this README (each release writes its own tag here)
 FetchContent_MakeAvailable(sciforge)
 target_link_libraries(my_tests PRIVATE sciforge::test)
 ```
