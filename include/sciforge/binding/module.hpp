@@ -76,6 +76,16 @@ namespace sciforge::binding {
   };
 }  // namespace sciforge::binding
 
+// A free-threaded CPython (3.13t, 3.14t: Py_GIL_DISABLED) re-enables the GIL for an extension that does not say it
+// runs without one. The substrate's state is written at import only (the method and type tables, each function's
+// keyword spec), which the import lock serialises, and read afterwards: the module says so. A consumer whose own
+// state is not safe without the GIL must not declare it.
+#ifdef Py_GIL_DISABLED
+#define SCIFORGE_BINDING_NO_GIL(module) PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
+#else
+#define SCIFORGE_BINDING_NO_GIL(module)
+#endif
+
 // Forward declaration of the module error getter (fixed name within the TU), so
 // functions defined before SCIFORGE_MODULE can call sciforge_module_error().
 #define SCIFORGE_BINDING_ERROR_GETTER PyObject* sciforge_module_error()
@@ -96,6 +106,7 @@ namespace sciforge::binding {
           if (module == nullptr) {                                                                \
             return nullptr;                                                                     \
           }                                                                                       \
+          SCIFORGE_BINDING_NO_GIL(module)                                                         \
           sciforge_module_error_storage = ::sciforge::binding::register_error(module, errorname); \
           if (sciforge_module_error_storage == nullptr) {                                         \
             Py_DECREF(module);                                                                  \

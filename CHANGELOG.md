@@ -7,6 +7,15 @@ version it cuts and refuses an empty one.
 
 ## Unreleased
 
+### Added
+- **The binding runs without the GIL on a free-threaded CPython** (3.14t, 3.15t: `Py_GIL_DISABLED`): `SCIFORGE_MODULE`
+  declares it (`PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED)`), where the interpreter re-enabled the GIL for
+  the module with a warning. The substrate writes its state at import only (the method and type tables, each
+  function's keyword spec), which the import lock serialises, and reads it afterwards. A consumer builds that wheel
+  without `Py_LIMITED_API` (the free-threaded headers refuse it), and declares nothing of its own unless its state is
+  safe without the GIL. Tested: NumericAL's binding under CPython 3.14.6t, the GIL still disabled after the import, its
+  290 tests, and eight Python threads calling 27 functions 300 times each with byte-identical answers.
+
 ## 2026.10.6 — 2026-10-20
 
 ### Added
