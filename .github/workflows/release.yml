@@ -63,7 +63,7 @@ jobs:
           name: dist
           path: dist
       # Pinned by commit: this third-party action runs with the OIDC token that publishes to PyPI.
-      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
 
   # The GitHub release, which nothing else creates: PyPI publishing does not, and a release made by
   # hand is the step that gets forgotten. Notes come from docs/release-notes/<tag>.md when the tag has
